@@ -9,6 +9,61 @@ interface Message {
   content: string;
 }
 
+interface Conversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Group conversations by date bucket
+function groupConversationsByDate(conversations: Conversation[]): Record<string, Conversation[]> {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const groups: Record<string, Conversation[]> = {
+    Today: [],
+    Yesterday: [],
+    'This week': [],
+    Older: [],
+  };
+
+  conversations.forEach((conv) => {
+    const convDate = new Date(conv.updated_at);
+    if (convDate >= today) {
+      groups.Today.push(conv);
+    } else if (convDate >= yesterday) {
+      groups.Yesterday.push(conv);
+    } else if (convDate >= weekAgo) {
+      groups['This week'].push(conv);
+    } else {
+      groups.Older.push(conv);
+    }
+  });
+
+  return groups;
+}
+
+// Format relative time
+function formatTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'now';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+  return date.toLocaleDateString();
+}
+
 export default function Home() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -17,6 +72,9 @@ export default function Home() {
   const [welcomeVisible, setWelcomeVisible] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loadingConv, setLoadingConv] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -27,6 +85,7 @@ export default function Home() {
     }
   }, [messages, loading]);
 
+  // Load user session
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
@@ -40,6 +99,30 @@ export default function Home() {
     return () => authListener.subscription.unsubscribe();
   }, []);
 
+  // Load conversations when user is authenticated
+  const loadConversations = async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id, title, created_at, updated_at')
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to load conversations:', error);
+      return;
+    }
+    setConversations(data || []);
+  };
+
+  useEffect(() => {
+    if (user) {
+      loadConversations();
+    } else {
+      setConversations([]);
+    }
+  }, [user]);
+
+  // Click outside menu closes it
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
@@ -69,9 +152,43 @@ export default function Home() {
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   };
 
+  // Load messages of a specific conversation
+  const loadConversation = async (convId: string) => {
+    if (loadingConv || convId === conversationId) return;
+
+    setLoadingConv(true);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('messages')
+      .select('role, content, created_at')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Failed to load messages:', error);
+      setLoadingConv(false);
+      return;
+    }
+
+    const loadedMessages: Message[] = (data || []).map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+
+    setMessages(loadedMessages);
+    setConversationId(convId);
+    setWelcomeVisible(false);
+    setLoadingConv(false);
+  };
+
   const sendMessage = async (text?: string) => {
     const messageText = (text ?? input).trim();
     if (!messageText || loading) return;
+
+    if (!user) {
+      router.push('/login');
+      return;
+    }
 
     setWelcomeVisible(false);
     setInput('');
@@ -89,19 +206,39 @@ export default function Home() {
         body: JSON.stringify({
           message: messageText,
           history: messages,
+          conversationId: conversationId,
         }),
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/login');
+          return;
+        }
         throw new Error(`API responded with ${response.status}`);
       }
 
       const data = await response.json();
+
+      // Save the conversationId from API
+      const isNewConv = !conversationId;
+      if (data.conversationId && !conversationId) {
+        setConversationId(data.conversationId);
+      }
+
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.reply || 'No response received.',
       };
       setMessages([...updatedMessages, assistantMessage]);
+
+      // Refresh conversation list (to show new convo or updated timestamps)
+      if (isNewConv) {
+        loadConversations();
+      } else {
+        // Just bump this conversation to the top
+        loadConversations();
+      }
     } catch (error) {
       console.error('Chat error:', error);
       const errorMessage: Message = {
@@ -129,9 +266,9 @@ export default function Home() {
     setMessages([]);
     setInput('');
     setWelcomeVisible(true);
+    setConversationId(null);
   };
 
-  // Helper: get first letter of first name (or email fallback)
   const getInitial = () => {
     if (!user) return null;
     const fullName = user.user_metadata?.full_name as string | undefined;
@@ -141,12 +278,13 @@ export default function Home() {
     return user.email?.[0]?.toUpperCase() || 'U';
   };
 
-  // Helper: display name (first name only for compactness)
   const getDisplayName = () => {
     if (!user) return 'Sign in';
     const fullName = user.user_metadata?.full_name as string | undefined;
     return fullName || user.email || 'User';
   };
+
+  const groupedConversations = groupConversationsByDate(conversations);
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -168,17 +306,38 @@ export default function Home() {
         </div>
 
         <div className="sb-scroll">
-          <div className="sb-section-label">Today</div>
-          {messages.length === 0 ? (
+          {!user ? (
             <div style={{ padding: '8px', fontSize: '0.55rem', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>
-              No conversations yet
+              Sign in to see your conversations
             </div>
+          ) : conversations.length === 0 ? (
+            <>
+              <div className="sb-section-label">Today</div>
+              <div style={{ padding: '8px', fontSize: '0.55rem', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>
+                No conversations yet
+              </div>
+            </>
           ) : (
-            <div className="conv-item active">
-              <div className="conv-dot"></div>
-              <span className="conv-name">Current conversation</span>
-              <span className="conv-time">now</span>
-            </div>
+            Object.entries(groupedConversations).map(([groupName, convs]) => {
+              if (convs.length === 0) return null;
+              return (
+                <div key={groupName}>
+                  <div className="sb-section-label">{groupName}</div>
+                  {convs.map((conv) => (
+                    <div
+                      key={conv.id}
+                      className={`conv-item ${conv.id === conversationId ? 'active' : ''}`}
+                      onClick={() => loadConversation(conv.id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="conv-dot"></div>
+                      <span className="conv-name">{conv.title || 'Untitled'}</span>
+                      <span className="conv-time">{formatTime(conv.updated_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })
           )}
         </div>
 
@@ -232,7 +391,6 @@ export default function Home() {
 
       {/* MAIN */}
       <div id="main">
-        {/* TOP BAR */}
         <div id="topbar">
           <div className="tb-left">
             <div className="tb-title">
@@ -242,7 +400,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* CHAT */}
         <div id="chat" ref={chatRef}>
           <div className="chat-inner">
             {welcomeVisible && (
@@ -309,7 +466,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* INPUT */}
         <div id="input-wrap">
           <div className="input-inner">
             <div className="input-box">
