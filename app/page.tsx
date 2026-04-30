@@ -76,6 +76,8 @@ export default function Home() {
   const [convMenuOpen, setConvMenuOpen] = useState<string | null>(null);
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [deleteConfirmConv, setDeleteConfirmConv] = useState<Conversation | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -144,7 +146,15 @@ export default function Home() {
       editInputRef.current.select();
     }
   }, [editingConvId]);
-
+  useEffect(() => {
+    const handleEsc = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && deleteConfirmConv) {
+        setDeleteConfirmConv(null);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [deleteConfirmConv]);
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -242,7 +252,47 @@ export default function Home() {
       );
     }
   };
+  const requestDeleteConv = (conv: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConvMenuOpen(null);
+    setDeleteConfirmConv(conv);
+  };
 
+  const cancelDelete = () => {
+    setDeleteConfirmConv(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmConv || deleting) return;
+
+    const convId = deleteConfirmConv.id;
+    const previousConvs = conversations;
+    const wasActive = conversationId === convId;
+
+    setDeleting(true);
+
+    setConversations((prev) => prev.filter((c) => c.id !== convId));
+
+    if (wasActive) {
+      setMessages([]);
+      setConversationId(null);
+      setWelcomeVisible(true);
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', convId);
+
+    setDeleting(false);
+    setDeleteConfirmConv(null);
+
+    if (error) {
+      console.error('Failed to delete conversation:', error);
+      setConversations(previousConvs);
+    }
+  };
   const handleEditKeyDown = (e: KeyboardEvent<HTMLInputElement>, convId: string) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -432,6 +482,13 @@ export default function Home() {
                                   <span className="conv-menu-icon">✎</span>
                                   <span>Rename</span>
                                 </button>
+                                <button
+                                  className="conv-menu-item conv-menu-danger"
+                                  onClick={(e) => requestDeleteConv(conv, e)}
+                                >
+                                  <span className="conv-menu-icon">⊘</span>
+                                  <span>Delete</span>
+                                </button>
                               </div>
                             )}
                           </>
@@ -607,6 +664,35 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {deleteConfirmConv && (
+        <div className="modal-backdrop" onClick={cancelDelete}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Delete conversation?</div>
+            <div className="modal-body">
+              This will permanently delete <strong>&ldquo;{deleteConfirmConv.title || 'Untitled'}&rdquo;</strong> and all its messages. This action cannot be undone.
+            </div>
+            <div className="modal-actions">
+              <button
+                className="modal-btn modal-btn-cancel"
+                onClick={cancelDelete}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="modal-btn modal-btn-danger"
+                onClick={confirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+

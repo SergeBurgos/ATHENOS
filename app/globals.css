@@ -824,3 +824,259 @@ body {
   outline: none;
   min-width: 0;
 }
+
+/* CONVERSATION DELETE — danger menu item + modal */
+#sb .conv-menu-item.conv-menu-danger {
+  color: #d97070;
+}
+
+#sb .conv-menu-item.conv-menu-danger:hover {
+  background: rgba(217, 112, 112, 0.1);
+  color: #ff8a8a;
+}
+
+#sb .conv-menu-item.conv-menu-danger .conv-menu-icon {
+  color: #d97070;
+}
+
+#sb .conv-menu-item.conv-menu-danger:hover .conv-menu-icon {
+  color: #ff8a8a;
+}
+
+/* MODAL — delete confirmation */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.modal-content {
+  background: var(--s2);
+  border: 1px solid rgba(201, 160, 53, 0.2);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  animation: slideUp 0.2s ease-out;
+}
+
+.modal-title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  color: var(--white);
+  margin-bottom: 12px;
+}
+
+.modal-body {
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  color: rgba(245, 240, 231, 0.7);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.modal-body strong {
+  color: var(--white);
+  font-weight: 500;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+
+.modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-btn-cancel {
+  background: transparent;
+  color: rgba(245, 240, 231, 0.7);
+  border-color: rgba(245, 240, 231, 0.2);
+}
+
+.modal-btn-cancel:hover:not(:disabled) {
+  background: rgba(245, 240, 231, 0.05);
+  color: var(--white);
+  border-color: rgba(245, 240, 231, 0.3);
+}
+
+.modal-btn-danger {
+  background: #b85555;
+  color: white;
+  border-color: #b85555;
+}
+
+.modal-btn-danger:hover:not(:disabled) {
+  background: #d96666;
+  border-color: #d96666;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#sb .conv-menu-item.conv-menu-danger {
+  color: #d97070;
+}
+
+#sb .conv-menu-item.conv-menu-danger:hover {
+  background: rgba(217, 112, 112, 0.1);
+  color: #ff8a8a;
+}
+
+#sb .conv-menu-item.conv-menu-danger .conv-menu-icon {
+  color: #d97070;
+}
+
+#sb .conv-menu-item.conv-menu-danger:hover .conv-menu-icon {
+  color: #ff8a8a;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.modal-content {
+  background: var(--s2);
+  border: 1px solid rgba(201, 160, 53, 0.2);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  animation: slideUp 0.2s ease-out;
+}
+
+.modal-title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  color: var(--white);
+  margin-bottom: 12px;
+}
+
+.modal-body {
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  color: rgba(245, 240, 231, 0.7);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.modal-body strong {
+  color: var(--white);
+  font-weight: 500;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+
+.modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-btn-cancel {
+  background: transparent;
+  color: rgba(245, 240, 231, 0.7);
+  border-color: rgba(245, 240, 231, 0.2);
+}
+
+.modal-btn-cancel:hover:not(:disabled) {
+  background: rgba(245, 240, 231, 0.05);
+  color: var(--white);
+  border-color: rgba(245, 240, 231, 0.3);
+}
+
+.modal-btn-danger {
+  background: #b85555;
+  color: white;
+  border-color: #b85555;
+}
+
+.modal-btn-danger:hover:not(:disabled) {
+  background: #d96666;
+  border-color: #d96666;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
