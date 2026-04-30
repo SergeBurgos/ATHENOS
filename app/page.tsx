@@ -603,12 +603,19 @@ export default function Home() {
               </div>
             )}
 
-            {messages.map((msg, i) => (
-              <div key={i} className={`msg ${msg.role === 'user' ? 'user' : 'ai'}`}>
-                <div className="msg-name">{msg.role === 'user' ? 'You' : 'Athenos'}</div>
-                <div className="msg-bubble">{msg.content}</div>
+            {loadingConv ? (
+              <div className="conv-loading">
+                <div className="conv-loading-spinner"></div>
+                <div className="conv-loading-text">Loading conversation...</div>
               </div>
-            ))}
+            ) : (
+              messages.map((msg, i) => (
+                <div key={i} className={`msg ${msg.role === 'user' ? 'user' : 'ai'} msg-fade-in`}>
+                  <div className="msg-name">{msg.role === 'user' ? 'You' : 'Athenos'}</div>
+                  <div className="msg-bubble">{msg.content}</div>
+                </div>
+              ))
+            )}
 
             {loading && (
               <div className="typing-wrap">
@@ -694,5 +701,3 @@ export default function Home() {
     </div>
   );
 }
-
-
