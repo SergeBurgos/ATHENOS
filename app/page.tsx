@@ -88,7 +88,7 @@ export default function Home() {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
-  }, [messages, loading]);
+  }, [messages, loading, conversationId, loadingConv]);
 
   useEffect(() => {
     const supabase = createClient();
