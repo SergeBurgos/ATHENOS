@@ -1,6 +1,8 @@
 'use client';
-
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import type { User } from '@supabase/supabase-js';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -8,18 +10,57 @@ interface Message {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [welcomeVisible, setWelcomeVisible] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [messages, loading]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => authListener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setMenuOpen(false);
+    router.push('/login');
+    router.refresh();
+  };
+
+  const handleSignIn = () => {
+    router.push('/login');
+  };
 
   const autoResize = () => {
     const el = textareaRef.current;
@@ -90,6 +131,23 @@ export default function Home() {
     setWelcomeVisible(true);
   };
 
+  // Helper: get first letter of first name (or email fallback)
+  const getInitial = () => {
+    if (!user) return null;
+    const fullName = user.user_metadata?.full_name as string | undefined;
+    if (fullName) {
+      return fullName.trim().split(' ')[0]?.[0]?.toUpperCase() || 'U';
+    }
+    return user.email?.[0]?.toUpperCase() || 'U';
+  };
+
+  // Helper: display name (first name only for compactness)
+  const getDisplayName = () => {
+    if (!user) return 'Sign in';
+    const fullName = user.user_metadata?.full_name as string | undefined;
+    return fullName || user.email || 'User';
+  };
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* SIDEBAR */}
@@ -130,13 +188,44 @@ export default function Home() {
             <button className="sb-mode-btn" disabled>Voice</button>
             <button className="sb-mode-btn" disabled>Both</button>
           </div>
-          <div className="sb-user">
-            <div className="sb-avatar">S</div>
-            <div className="sb-user-info">
-              <div className="sb-user-name">Sergio Burgos</div>
-              <div className="sb-user-plan">Strategist · Bronze</div>
+          <div className="sb-user-wrapper" ref={userMenuRef}>
+            <div
+              className="sb-user"
+              onClick={() => user ? setMenuOpen(!menuOpen) : handleSignIn()}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className={`sb-avatar ${!user ? 'guest' : ''}`}>
+                {user ? getInitial() : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z" />
+                  </svg>
+                )}
+              </div>
+              <div className="sb-user-info">
+                <div className="sb-user-name">{getDisplayName()}</div>
+                <div className="sb-user-plan">
+                  {user ? 'Strategist · Bronze' : 'Not signed in'}
+                </div>
+              </div>
+              {user && <span className="sb-user-dots">···</span>}
             </div>
-            <span className="sb-user-dots">···</span>
+            {menuOpen && user && (
+              <div className="sb-user-menu">
+                <button className="sb-menu-item disabled" disabled>
+                  <span className="sb-menu-icon">⚙</span>
+                  <span>Settings</span>
+                </button>
+                <button className="sb-menu-item disabled" disabled>
+                  <span className="sb-menu-icon">◐</span>
+                  <span>Profile</span>
+                </button>
+                <div className="sb-menu-divider"></div>
+                <button className="sb-menu-item" onClick={handleSignOut}>
+                  <span className="sb-menu-icon">⎋</span>
+                  <span>Sign out</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
