@@ -16,7 +16,6 @@ interface Conversation {
   updated_at: string;
 }
 
-// Group conversations by date bucket
 function groupConversationsByDate(conversations: Conversation[]): Record<string, Conversation[]> {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -48,7 +47,6 @@ function groupConversationsByDate(conversations: Conversation[]): Record<string,
   return groups;
 }
 
-// Format relative time
 function formatTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
@@ -75,9 +73,14 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConv, setLoadingConv] = useState(false);
+  const [convMenuOpen, setConvMenuOpen] = useState<string | null>(null);
+  const [editingConvId, setEditingConvId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const convMenuRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (chatRef.current) {
@@ -85,7 +88,6 @@ export default function Home() {
     }
   }, [messages, loading]);
 
-  // Load user session
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
@@ -99,7 +101,6 @@ export default function Home() {
     return () => authListener.subscription.unsubscribe();
   }, []);
 
-  // Load conversations when user is authenticated
   const loadConversations = async () => {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -122,16 +123,27 @@ export default function Home() {
     }
   }, [user]);
 
-  // Click outside menu closes it
+  // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
       }
+      if (convMenuRef.current && !convMenuRef.current.contains(event.target as Node)) {
+        setConvMenuOpen(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (editingConvId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingConvId]);
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -152,7 +164,6 @@ export default function Home() {
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   };
 
-  // Load messages of a specific conversation
   const loadConversation = async (convId: string) => {
     if (loadingConv || convId === conversationId) return;
 
@@ -179,6 +190,67 @@ export default function Home() {
     setConversationId(convId);
     setWelcomeVisible(false);
     setLoadingConv(false);
+  };
+
+  const startEditingConv = (conv: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingConvId(conv.id);
+    setEditTitle(conv.title || '');
+    setConvMenuOpen(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingConvId(null);
+    setEditTitle('');
+  };
+
+  const saveEdit = async (convId: string) => {
+    const newTitle = editTitle.trim();
+    if (!newTitle) {
+      cancelEdit();
+      return;
+    }
+
+    // Find current title for rollback
+    const currentConv = conversations.find((c) => c.id === convId);
+    const previousTitle = currentConv?.title || '';
+
+    if (newTitle === previousTitle) {
+      cancelEdit();
+      return;
+    }
+
+    // Optimistic update — update UI immediately
+    setConversations((prev) =>
+      prev.map((c) => (c.id === convId ? { ...c, title: newTitle } : c))
+    );
+    setEditingConvId(null);
+    setEditTitle('');
+
+    // Persist to Supabase
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('conversations')
+      .update({ title: newTitle })
+      .eq('id', convId);
+
+    if (error) {
+      console.error('Failed to rename conversation:', error);
+      // Rollback on failure
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: previousTitle } : c))
+      );
+    }
+  };
+
+  const handleEditKeyDown = (e: KeyboardEvent<HTMLInputElement>, convId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEdit(convId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+    }
   };
 
   const sendMessage = async (text?: string) => {
@@ -220,8 +292,6 @@ export default function Home() {
 
       const data = await response.json();
 
-      // Save the conversationId from API
-      const isNewConv = !conversationId;
       if (data.conversationId && !conversationId) {
         setConversationId(data.conversationId);
       }
@@ -232,13 +302,7 @@ export default function Home() {
       };
       setMessages([...updatedMessages, assistantMessage]);
 
-      // Refresh conversation list (to show new convo or updated timestamps)
-      if (isNewConv) {
-        loadConversations();
-      } else {
-        // Just bump this conversation to the top
-        loadConversations();
-      }
+      loadConversations();
     } catch (error) {
       console.error('Chat error:', error);
       const errorMessage: Message = {
@@ -323,18 +387,58 @@ export default function Home() {
               return (
                 <div key={groupName}>
                   <div className="sb-section-label">{groupName}</div>
-                  {convs.map((conv) => (
-                    <div
-                      key={conv.id}
-                      className={`conv-item ${conv.id === conversationId ? 'active' : ''}`}
-                      onClick={() => loadConversation(conv.id)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <div className="conv-dot"></div>
-                      <span className="conv-name">{conv.title || 'Untitled'}</span>
-                      <span className="conv-time">{formatTime(conv.updated_at)}</span>
-                    </div>
-                  ))}
+                  {convs.map((conv) => {
+                    const isEditing = editingConvId === conv.id;
+                    const isMenuOpen = convMenuOpen === conv.id;
+                    return (
+                      <div
+                        key={conv.id}
+                        className={`conv-item ${conv.id === conversationId ? 'active' : ''}`}
+                        onClick={() => !isEditing && loadConversation(conv.id)}
+                        style={{ cursor: isEditing ? 'default' : 'pointer', position: 'relative' }}
+                      >
+                        <div className="conv-dot"></div>
+                        {isEditing ? (
+                          <input
+                            ref={editInputRef}
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={(e) => handleEditKeyDown(e, conv.id)}
+                            onBlur={() => saveEdit(conv.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="conv-name-input"
+                          />
+                        ) : (
+                          <>
+                            <span className="conv-name">{conv.title || 'Untitled'}</span>
+                            <span className="conv-time">{formatTime(conv.updated_at)}</span>
+                            <button
+                              className="conv-dots-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConvMenuOpen(isMenuOpen ? null : conv.id);
+                              }}
+                              aria-label="Conversation options"
+                            >
+                              ⋮
+                            </button>
+                            {isMenuOpen && (
+                              <div className="conv-menu" ref={convMenuRef}>
+                                <button
+                                  className="conv-menu-item"
+                                  onClick={(e) => startEditingConv(conv, e)}
+                                >
+                                  <span className="conv-menu-icon">✎</span>
+                                  <span>Rename</span>
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })
