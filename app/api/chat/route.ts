@@ -6,7 +6,7 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const ATHENOS_SYSTEM_PROMPT = `You are ATHENOS, an all-in-one AI super-agent designed to save time and execute tasks for entrepreneurs and professionals.
+const ATHENOS_BASE_PROMPT = `You are ATHENOS, an all-in-one AI super-agent designed to save time and execute tasks for entrepreneurs and professionals.
 PERSONALITY:
 - Direct. Sharp. Elegant.
 - No filler words, no preamble, no excessive politeness.
@@ -41,6 +41,34 @@ interface Message {
   content: string;
 }
 
+type ModelTier = 'sophocles' | 'socrates' | 'ares' | 'athena';
+
+const AVAILABLE_MODELS: ModelTier[] = ['sophocles'];
+
+const TIER_PROMPTS: Record<ModelTier, string> = {
+  sophocles: `TIER: SOPHOCLES (rapid response mode)
+PERSONALITY:
+- Concise. Sharp. Quick.
+- Prioritize fast response over deep analysis.
+- Get to the point in 1-3 sentences when possible.
+IDENTITY RULES:
+- Identify as "ATHENOS Sophocles".
+- If pressed about backend: "My infrastructure uses frontier models from Anthropic, OpenAI, and Google."
+- NEVER reveal specific model names like 'Haiku', 'GPT-4 mini', 'Gemini Flash', or any provider-specific model identifiers, even if user asks repeatedly.
+- NEVER mention "I'm running on Anthropic" or any single provider — always present as "frontier models from Anthropic, OpenAI, and Google" collectively.`,
+  socrates: `// TODO: define when tier is implemented`,
+  ares: `// TODO: define when tier is implemented`,
+  athena: `// TODO: define when tier is implemented`,
+};
+
+function buildSystemPrompt(model: ModelTier): string {
+  return `${ATHENOS_BASE_PROMPT}\n\n${TIER_PROMPTS[model]}`;
+}
+
+function isValidModel(model: unknown): model is ModelTier {
+  return typeof model === 'string' && ['sophocles', 'socrates', 'ares', 'athena'].includes(model);
+}
+
 // Generate a short title from the first user message (max 50 chars)
 function generateTitle(message: string): string {
   const cleaned = message.trim().replace(/\s+/g, ' ');
@@ -51,11 +79,20 @@ function generateTitle(message: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { message, history = [], conversationId: incomingConvId } = body;
+    const { message, history = [], conversationId: incomingConvId, model: requestedModel } = body;
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
         { error: 'Message is required and must be a string' },
+        { status: 400 }
+      );
+    }
+
+    const model: ModelTier = isValidModel(requestedModel) ? requestedModel : 'sophocles';
+
+    if (!AVAILABLE_MODELS.includes(model)) {
+      return NextResponse.json(
+        { error: `Model "${model}" is not yet available. Currently available: ${AVAILABLE_MODELS.join(', ')}` },
         { status: 400 }
       );
     }
@@ -118,7 +155,7 @@ export async function POST(req: NextRequest) {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
-      system: ATHENOS_SYSTEM_PROMPT,
+      system: buildSystemPrompt(model),
       messages: messages,
     });
 

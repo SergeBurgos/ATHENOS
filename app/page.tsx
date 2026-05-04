@@ -16,6 +16,11 @@ interface Conversation {
   updated_at: string;
 }
 
+type ModelTier = 'sophocles' | 'socrates' | 'ares' | 'athena';
+
+const DEFAULT_MODEL: ModelTier = 'sophocles';
+const STORAGE_KEY_MODEL = 'athenos_model';
+
 function groupConversationsByDate(conversations: Conversation[]): Record<string, Conversation[]> {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -78,10 +83,14 @@ export default function Home() {
   const [editTitle, setEditTitle] = useState('');
   const [deleteConfirmConv, setDeleteConfirmConv] = useState<Conversation | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [currentModel, setCurrentModel] = useState<ModelTier>(DEFAULT_MODEL);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [comingSoonModalOpen, setComingSoonModalOpen] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const convMenuRef = useRef<HTMLDivElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -102,6 +111,27 @@ export default function Home() {
 
     return () => authListener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem(STORAGE_KEY_MODEL);
+    if (stored && (stored === 'sophocles' || stored === 'socrates' || stored === 'ares' || stored === 'athena')) {
+      setCurrentModel(stored as ModelTier);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(STORAGE_KEY_MODEL, currentModel);
+  }, [currentModel]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.className = `model-${currentModel}`;
+    return () => {
+      document.body.className = '';
+    };
+  }, [currentModel]);
 
   const loadConversations = async () => {
     const supabase = createClient();
@@ -133,6 +163,9 @@ export default function Home() {
       }
       if (convMenuRef.current && !convMenuRef.current.contains(event.target as Node)) {
         setConvMenuOpen(null);
+      }
+      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+        setModelMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -330,6 +363,7 @@ export default function Home() {
           message: messageText,
           history: messages,
           conversationId: conversationId,
+          model: currentModel,
         }),
       });
 
@@ -372,339 +406,388 @@ export default function Home() {
   };
 
 
-const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-};
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
-const useSuggestion = (text: string) => {
-  sendMessage(text);
-};
+  const useSuggestion = (text: string) => {
+    sendMessage(text);
+  };
 
-const newChat = () => {
-  setMessages([]);
-  setInput('');
-  setWelcomeVisible(true);
-  setConversationId(null);
-};
+  const newChat = () => {
+    setMessages([]);
+    setInput('');
+    setWelcomeVisible(true);
+    setConversationId(null);
+  };
 
-const getInitial = () => {
-  if (!user) return null;
-  const fullName = user.user_metadata?.full_name as string | undefined;
-  if (fullName) {
-    return fullName.trim().split(' ')[0]?.[0]?.toUpperCase() || 'U';
-  }
-  return user.email?.[0]?.toUpperCase() || 'U';
-};
+  const getInitial = () => {
+    if (!user) return null;
+    const fullName = user.user_metadata?.full_name as string | undefined;
+    if (fullName) {
+      return fullName.trim().split(' ')[0]?.[0]?.toUpperCase() || 'U';
+    }
+    return user.email?.[0]?.toUpperCase() || 'U';
+  };
 
-const getDisplayName = () => {
-  if (!user) return 'Sign in';
-  const fullName = user.user_metadata?.full_name as string | undefined;
-  return fullName || user.email || 'User';
-};
+  const getDisplayName = () => {
+    if (!user) return 'Sign in';
+    const fullName = user.user_metadata?.full_name as string | undefined;
+    return fullName || user.email || 'User';
+  };
 
-const groupedConversations = groupConversationsByDate(conversations);
+  const groupedConversations = groupConversationsByDate(conversations);
 
-return (
-  <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-    {/* SIDEBAR */}
-    <div id="sb">
-      <div className="sb-top">
-        <div className="sb-logo">
-          <svg width="20" height="26" viewBox="0 0 110 150" fill="none">
-            <line x1="18" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="92" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="33" y1="99" x2="77" y2="99" stroke="#C9A035" strokeWidth="1.1" strokeLinecap="round" />
-          </svg>
-          <span className="sb-logo-word">Athenos</span>
-        </div>
-        <button className="sb-new" onClick={newChat}>
-          <span className="sb-new-icon">✦</span>
-          New conversation
-        </button>
-      </div>
-
-      <div className="sb-scroll">
-        {!user ? (
-          <div style={{ padding: '8px', fontSize: '0.55rem', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>
-            Sign in to see your conversations
+  return (
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {/* SIDEBAR */}
+      <div id="sb">
+        <div className="sb-top">
+          <div className="sb-logo">
+            <svg width="20" height="26" viewBox="0 0 110 150" fill="none">
+              <line x1="18" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="92" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="33" y1="99" x2="77" y2="99" stroke="#C9A035" strokeWidth="1.1" strokeLinecap="round" />
+            </svg>
+            <span className="sb-logo-word">Athenos</span>
           </div>
-        ) : conversations.length === 0 ? (
-          <>
-            <div className="sb-section-label">Today</div>
+          <button className="sb-new" onClick={newChat}>
+            <span className="sb-new-icon">✦</span>
+            New conversation
+          </button>
+        </div>
+
+        <div className="sb-scroll">
+          {!user ? (
             <div style={{ padding: '8px', fontSize: '0.55rem', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>
-              No conversations yet
+              Sign in to see your conversations
             </div>
-          </>
-        ) : (
-          Object.entries(groupedConversations).map(([groupName, convs]) => {
-            if (convs.length === 0) return null;
-            return (
-              <div key={groupName}>
-                <div className="sb-section-label">{groupName}</div>
-                {convs.map((conv) => {
-                  const isEditing = editingConvId === conv.id;
-                  const isMenuOpen = convMenuOpen === conv.id;
-                  return (
-                    <div
-                      key={conv.id}
-                      className={`conv-item ${conv.id === conversationId ? 'active' : ''}`}
-                      onClick={() => !isEditing && loadConversation(conv.id)}
-                      style={{ cursor: isEditing ? 'default' : 'pointer', position: 'relative' }}
-                    >
-                      <div className="conv-dot"></div>
-                      {isEditing ? (
-                        <input
-                          ref={editInputRef}
-                          type="text"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          onKeyDown={(e) => handleEditKeyDown(e, conv.id)}
-                          onBlur={() => saveEdit(conv.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="conv-name-input"
-                        />
-                      ) : (
-                        <>
-                          <span className="conv-name">{conv.title || 'Untitled'}</span>
-                          <span className="conv-time">{formatTime(conv.updated_at)}</span>
-                          <button
-                            className="conv-dots-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setConvMenuOpen(isMenuOpen ? null : conv.id);
-                            }}
-                            aria-label="Conversation options"
-                          >
-                            ⋮
-                          </button>
-                          {isMenuOpen && (
-                            <div className="conv-menu" ref={convMenuRef}>
-                              <button
-                                className="conv-menu-item"
-                                onClick={(e) => startEditingConv(conv, e)}
-                              >
-                                <span className="conv-menu-icon">✎</span>
-                                <span>Rename</span>
-                              </button>
-                              <button
-                                className="conv-menu-item conv-menu-danger"
-                                onClick={(e) => requestDeleteConv(conv, e)}
-                              >
-                                <span className="conv-menu-icon">⊘</span>
-                                <span>Delete</span>
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+          ) : conversations.length === 0 ? (
+            <>
+              <div className="sb-section-label">Today</div>
+              <div style={{ padding: '8px', fontSize: '0.55rem', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>
+                No conversations yet
               </div>
-            );
-          })
-        )}
-      </div>
-
-      <div className="sb-bottom">
-        <div className="sb-mode-switcher">
-          <button className="sb-mode-btn active">Chat</button>
-          <button className="sb-mode-btn" disabled>Voice</button>
-          <button className="sb-mode-btn" disabled>Both</button>
-        </div>
-        <div className="sb-user-wrapper" ref={userMenuRef}>
-          <div
-            className="sb-user"
-            onClick={() => user ? setMenuOpen(!menuOpen) : handleSignIn()}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className={`sb-avatar ${!user ? 'guest' : ''}`}>
-              {user ? getInitial() : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z" />
-                </svg>
-              )}
-            </div>
-            <div className="sb-user-info">
-              <div className="sb-user-name">{getDisplayName()}</div>
-              <div className="sb-user-plan">
-                {user ? 'Strategist · Bronze' : 'Not signed in'}
-              </div>
-            </div>
-            {user && <span className="sb-user-dots">···</span>}
-          </div>
-          {menuOpen && user && (
-            <div className="sb-user-menu">
-              <button className="sb-menu-item disabled" disabled>
-                <span className="sb-menu-icon">⚙</span>
-                <span>Settings</span>
-              </button>
-              <button className="sb-menu-item disabled" disabled>
-                <span className="sb-menu-icon">◐</span>
-                <span>Profile</span>
-              </button>
-              <div className="sb-menu-divider"></div>
-              <button className="sb-menu-item" onClick={handleSignOut}>
-                <span className="sb-menu-icon">⎋</span>
-                <span>Sign out</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-
-    {/* MAIN */}
-    <div id="main">
-      <div id="topbar">
-        <div className="tb-left">
-          <div className="tb-title">
-            {welcomeVisible ? 'New conversation' : 'Conversation'}
-          </div>
-          <div className="tb-tag">Chat</div>
-        </div>
-      </div>
-
-      <div id="chat" ref={chatRef}>
-        <div className="chat-inner">
-          {welcomeVisible && (
-            <div id="welcome">
-              <div className="w-logo">
-                <svg width="56" height="74" viewBox="0 0 110 150" fill="none">
-                  <line x1="18" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.2" strokeLinecap="round" />
-                  <line x1="92" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.2" strokeLinecap="round" />
-                  <line x1="33" y1="99" x2="77" y2="99" stroke="#C9A035" strokeWidth="0.88" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="w-title">Hello.</h2>
-                <p className="w-sub" style={{ marginTop: '6px' }}>
-                  What do you want me to work on?
-                </p>
-              </div>
-              <div className="w-suggestions">
-                <button className="w-sug" onClick={() => useSuggestion('Draft a cold email to investors about my Series A.')}>
-                  <span className="w-sug-icon">✉</span>
-                  <span className="w-sug-title">Investor outreach</span>
-                  <span className="w-sug-desc">Draft personalized investor emails</span>
-                </button>
-                <button className="w-sug" onClick={() => useSuggestion('Help me research my top 3 competitors and summarize their positioning.')}>
-                  <span className="w-sug-icon">◉</span>
-                  <span className="w-sug-title">Competitive research</span>
-                  <span className="w-sug-desc">Analyze competitors in your market</span>
-                </button>
-                <button className="w-sug" onClick={() => useSuggestion('Help me plan my week. What should I prioritize?')}>
-                  <span className="w-sug-icon">◐</span>
-                  <span className="w-sug-title">Plan my week</span>
-                  <span className="w-sug-desc">Prioritize tasks and time blocks</span>
-                </button>
-                <button className="w-sug" onClick={() => useSuggestion('Help me brainstorm ideas for a new product launch.')}>
-                  <span className="w-sug-icon">◑</span>
-                  <span className="w-sug-title">Product brainstorm</span>
-                  <span className="w-sug-desc">Generate new product ideas</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {loadingConv ? (
-            <div className="conv-loading">
-              <div className="conv-loading-spinner"></div>
-              <div className="conv-loading-text">Loading conversation...</div>
-            </div>
+            </>
           ) : (
-            messages.map((msg, i) => (
-              <div key={i} className={`msg ${msg.role === 'user' ? 'user' : 'ai'} msg-fade-in`}>
-                <div className="msg-name">{msg.role === 'user' ? 'You' : 'Athenos'}</div>
-                <div className="msg-bubble">{msg.content}</div>
-              </div>
-            ))
-          )}
-
-          {loading && (
-            <div className="typing-wrap">
-              <svg className="typing-avatar" width="24" height="32" viewBox="0 0 110 150" fill="none">
-                <line x1="18" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
-                <line x1="92" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
-                <line x1="33" y1="99" x2="77" y2="99" stroke="#C9A035" strokeWidth="1.1" strokeLinecap="round" />
-              </svg>
-              <div className="typing-bubble">
-                <div className="t-dot"></div>
-                <div className="t-dot"></div>
-                <div className="t-dot"></div>
-              </div>
-            </div>
+            Object.entries(groupedConversations).map(([groupName, convs]) => {
+              if (convs.length === 0) return null;
+              return (
+                <div key={groupName}>
+                  <div className="sb-section-label">{groupName}</div>
+                  {convs.map((conv) => {
+                    const isEditing = editingConvId === conv.id;
+                    const isMenuOpen = convMenuOpen === conv.id;
+                    return (
+                      <div
+                        key={conv.id}
+                        className={`conv-item ${conv.id === conversationId ? 'active' : ''}`}
+                        onClick={() => !isEditing && loadConversation(conv.id)}
+                        style={{ cursor: isEditing ? 'default' : 'pointer', position: 'relative' }}
+                      >
+                        <div className="conv-dot"></div>
+                        {isEditing ? (
+                          <input
+                            ref={editInputRef}
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={(e) => handleEditKeyDown(e, conv.id)}
+                            onBlur={() => saveEdit(conv.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="conv-name-input"
+                          />
+                        ) : (
+                          <>
+                            <span className="conv-name">{conv.title || 'Untitled'}</span>
+                            <span className="conv-time">{formatTime(conv.updated_at)}</span>
+                            <button
+                              className="conv-dots-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConvMenuOpen(isMenuOpen ? null : conv.id);
+                              }}
+                              aria-label="Conversation options"
+                            >
+                              ⋮
+                            </button>
+                            {isMenuOpen && (
+                              <div className="conv-menu" ref={convMenuRef}>
+                                <button
+                                  className="conv-menu-item"
+                                  onClick={(e) => startEditingConv(conv, e)}
+                                >
+                                  <span className="conv-menu-icon">✎</span>
+                                  <span>Rename</span>
+                                </button>
+                                <button
+                                  className="conv-menu-item conv-menu-danger"
+                                  onClick={(e) => requestDeleteConv(conv, e)}
+                                >
+                                  <span className="conv-menu-icon">⊘</span>
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })
           )}
         </div>
-      </div>
 
-      <div id="input-wrap">
-        <div className="input-inner">
-          <div className="input-box">
-            <textarea
-              ref={textareaRef}
-              id="inp"
-              placeholder="Tell Athenos what to do..."
-              rows={1}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                autoResize();
-              }}
-              onKeyDown={handleKeyDown}
-              disabled={loading}
-            />
-            <div className="input-toolbar">
-              <div className="it-left"></div>
-              <div className="it-right">
-                <div className="it-model">Athenos Strategist</div>
-                <button
-                  id="send-btn"
-                  type="button"
-                  onClick={() => sendMessage()}
-                  disabled={loading || !input.trim()}
-                >
-                  ↑
+        <div className="sb-bottom">
+          <div className="sb-mode-switcher">
+            <button className="sb-mode-btn active">Chat</button>
+            <button className="sb-mode-btn" disabled>Voice</button>
+            <button className="sb-mode-btn" disabled>Both</button>
+          </div>
+          <div className="sb-user-wrapper" ref={userMenuRef}>
+            <div
+              className="sb-user"
+              onClick={() => user ? setMenuOpen(!menuOpen) : handleSignIn()}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className={`sb-avatar ${!user ? 'guest' : ''}`}>
+                {user ? getInitial() : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z" />
+                  </svg>
+                )}
+              </div>
+              <div className="sb-user-info">
+                <div className="sb-user-name">{getDisplayName()}</div>
+                <div className="sb-user-plan">
+                  {user ? 'Strategist · Bronze' : 'Not signed in'}
+                </div>
+              </div>
+              {user && <span className="sb-user-dots">···</span>}
+            </div>
+            {menuOpen && user && (
+              <div className="sb-user-menu">
+                <button className="sb-menu-item disabled" disabled>
+                  <span className="sb-menu-icon">⚙</span>
+                  <span>Settings</span>
+                </button>
+                <button className="sb-menu-item disabled" disabled>
+                  <span className="sb-menu-icon">◐</span>
+                  <span>Profile</span>
+                </button>
+                <div className="sb-menu-divider"></div>
+                <button className="sb-menu-item" onClick={handleSignOut}>
+                  <span className="sb-menu-icon">⎋</span>
+                  <span>Sign out</span>
                 </button>
               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div id="main">
+        <div id="topbar">
+          <div className="tb-left">
+            <div className="tb-title">
+              {welcomeVisible ? 'New conversation' : 'Conversation'}
+            </div>
+            <div className="tb-tag">Chat</div>
+          </div>
+        </div>
+
+        <div id="chat" ref={chatRef}>
+          <div className="chat-inner">
+            {welcomeVisible && (
+              <div id="welcome">
+                <div className="w-logo">
+                  <svg width="56" height="74" viewBox="0 0 110 150" fill="none">
+                    <line x1="18" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.2" strokeLinecap="round" />
+                    <line x1="92" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.2" strokeLinecap="round" />
+                    <line x1="33" y1="99" x2="77" y2="99" stroke="#C9A035" strokeWidth="0.88" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="w-title">Hello.</h2>
+                  <p className="w-sub" style={{ marginTop: '6px' }}>
+                    What do you want me to work on?
+                  </p>
+                </div>
+                <div className="w-suggestions">
+                  <button className="w-sug" onClick={() => useSuggestion('Draft a cold email to investors about my Series A.')}>
+                    <span className="w-sug-icon">✉</span>
+                    <span className="w-sug-title">Investor outreach</span>
+                    <span className="w-sug-desc">Draft personalized investor emails</span>
+                  </button>
+                  <button className="w-sug" onClick={() => useSuggestion('Help me research my top 3 competitors and summarize their positioning.')}>
+                    <span className="w-sug-icon">◉</span>
+                    <span className="w-sug-title">Competitive research</span>
+                    <span className="w-sug-desc">Analyze competitors in your market</span>
+                  </button>
+                  <button className="w-sug" onClick={() => useSuggestion('Help me plan my week. What should I prioritize?')}>
+                    <span className="w-sug-icon">◐</span>
+                    <span className="w-sug-title">Plan my week</span>
+                    <span className="w-sug-desc">Prioritize tasks and time blocks</span>
+                  </button>
+                  <button className="w-sug" onClick={() => useSuggestion('Help me brainstorm ideas for a new product launch.')}>
+                    <span className="w-sug-icon">◑</span>
+                    <span className="w-sug-title">Product brainstorm</span>
+                    <span className="w-sug-desc">Generate new product ideas</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {loadingConv ? (
+              <div className="conv-loading">
+                <div className="conv-loading-spinner"></div>
+                <div className="conv-loading-text">Loading conversation...</div>
+              </div>
+            ) : (
+              messages.map((msg, i) => (
+                <div key={i} className={`msg ${msg.role === 'user' ? 'user' : 'ai'} msg-fade-in`}>
+                  <div className="msg-name">{msg.role === 'user' ? 'You' : 'Athenos'}</div>
+                  <div className="msg-bubble">{msg.content}</div>
+                </div>
+              ))
+            )}
+
+            {loading && (
+              <div className="typing-wrap">
+                <svg className="typing-avatar" width="24" height="32" viewBox="0 0 110 150" fill="none">
+                  <line x1="18" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1="92" y1="142" x2="55" y2="36" stroke="#C9A035" strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1="33" y1="99" x2="77" y2="99" stroke="#C9A035" strokeWidth="1.1" strokeLinecap="round" />
+                </svg>
+                <div className="typing-bubble">
+                  <div className="t-dot"></div>
+                  <div className="t-dot"></div>
+                  <div className="t-dot"></div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div id="input-wrap">
+          <div className="input-inner">
+            <div className="input-box">
+              <textarea
+                ref={textareaRef}
+                id="inp"
+                placeholder="Tell Athenos what to do..."
+                rows={1}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  autoResize();
+                }}
+                onKeyDown={handleKeyDown}
+                disabled={loading}
+              />
+              <div className="input-toolbar">
+                <div className="it-left"></div>
+                <div className="it-right" style={{ position: 'relative' }} ref={modelMenuRef}>
+                  <button 
+                    className={`it-model ${modelMenuOpen ? 'active' : ''}`}
+                    onClick={() => setModelMenuOpen(!modelMenuOpen)}
+                    type="button"
+                  >
+                    Athenos {currentModel.charAt(0).toUpperCase() + currentModel.slice(1)}
+                  </button>
+                  {modelMenuOpen && (
+                    <div className="model-menu">
+                      <button className="model-menu-item" onClick={() => setModelMenuOpen(false)}>
+                        <span className="model-menu-icon" style={{ opacity: 0 }}></span>
+                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Sophocles</span>
+                        <span className="model-menu-check">✓</span>
+                      </button>
+                      <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
+                        <span className="model-menu-icon" style={{color: 'var(--gold)'}}>🔒</span>
+                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Socrates</span>
+                        <span className="model-menu-sub">Coming soon</span>
+                      </button>
+                      <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
+                        <span className="model-menu-icon" style={{color: 'var(--gold)'}}>🔒</span>
+                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Ares</span>
+                        <span className="model-menu-sub">Coming soon</span>
+                      </button>
+                      <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
+                        <span className="model-menu-icon" style={{color: 'var(--gold)'}}>🔒</span>
+                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Athena</span>
+                        <span className="model-menu-sub">Coming soon</span>
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    id="send-btn"
+                    type="button"
+                    onClick={() => sendMessage()}
+                    disabled={loading || !input.trim()}
+                  >
+                    ↑
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="input-hint">
+              Athenos can make mistakes. Review important actions before they execute.
             </div>
           </div>
-          <div className="input-hint">
-            Athenos can make mistakes. Review important actions before they execute.
-          </div>
         </div>
       </div>
-    </div>
 
-    {deleteConfirmConv && (
-      <div className="modal-backdrop" onClick={cancelDelete}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-title">Delete conversation?</div>
-          <div className="modal-body">
-            This will permanently delete <strong>&ldquo;{deleteConfirmConv.title || 'Untitled'}&rdquo;</strong> and all its messages. This action cannot be undone.
-          </div>
-          <div className="modal-actions">
-            <button
-              className="modal-btn modal-btn-cancel"
-              onClick={cancelDelete}
-              disabled={deleting}
-            >
-              Cancel
-            </button>
-            <button
-              className="modal-btn modal-btn-danger"
-              onClick={confirmDelete}
-              disabled={deleting}
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </button>
+      {comingSoonModalOpen && (
+        <div className="modal-backdrop" onClick={() => setComingSoonModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Coming soon</div>
+            <div className="modal-body">
+              This model will be available when ATHENOS launches its full Strategist plan.
+            </div>
+            <div className="modal-actions">
+              <button
+                className="modal-btn modal-btn-cancel"
+                onClick={() => setComingSoonModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    )}
-  </div>
-);
+      )}
+
+      {deleteConfirmConv && (
+        <div className="modal-backdrop" onClick={cancelDelete}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Delete conversation?</div>
+            <div className="modal-body">
+              This will permanently delete <strong>&ldquo;{deleteConfirmConv.title || 'Untitled'}&rdquo;</strong> and all its messages. This action cannot be undone.
+            </div>
+            <div className="modal-actions">
+              <button
+                className="modal-btn modal-btn-cancel"
+                onClick={cancelDelete}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="modal-btn modal-btn-danger"
+                onClick={confirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

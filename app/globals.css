@@ -36,7 +36,6 @@ body {
   background: var(--black);
   color: var(--white);
   font-family: var(--sans);
-  display: flex;
 }
 
 /* SIDEBAR */
@@ -369,7 +368,28 @@ body {
 #chat {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 32px 24px;
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+#chat::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+}
+
+#chat::-webkit-scrollbar-track {
+  display: none !important;
+  background: transparent !important;
+}
+
+#chat::-webkit-scrollbar-thumb {
+  display: none !important;
+  background: transparent !important;
 }
 
 .chat-inner {
@@ -544,9 +564,7 @@ body {
 /* INPUT */
 #input-wrap {
   padding: 16px 24px 24px;
-  border-top: 1px solid rgba(201, 160, 53, 0.06);
-  background: rgba(6, 6, 6, 0.6);
-  backdrop-filter: blur(20px);
+  background: transparent;
   flex-shrink: 0;
 }
 
@@ -604,6 +622,75 @@ body {
   padding: 4px 10px;
   border: 1px solid rgba(201, 160, 53, 0.15);
   border-radius: 12px;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.it-model:hover, .it-model.active {
+  background: rgba(201, 160, 53, 0.08);
+  border-color: rgba(201, 160, 53, 0.3);
+  color: var(--gold);
+}
+
+.model-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--s3);
+  border: 1px solid rgba(201, 160, 53, 0.2);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.model-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--white);
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+  width: 100%;
+}
+
+.model-menu-item:hover:not(.disabled) {
+  background: rgba(201, 160, 53, 0.1);
+  color: var(--gold2);
+}
+
+.model-menu-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.model-menu-icon {
+  font-size: 0.85rem;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.model-menu-sub {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.model-menu-check {
+  color: var(--gold);
+  font-weight: bold;
 }
 
 #send-btn {
@@ -1126,4 +1213,158 @@ body {
 
 .msg-fade-in {
   animation: fadeInMessage 0.25s ease-out;
+}
+
+/* ════════════════════════════════════════════════════════════
+   MODEL SOPHOCLES — cyan ambient background
+   ════════════════════════════════════════════════════════════ */
+
+/* Override default body background when sophocles is active */
+.model-sophocles {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 25% 30%, rgba(127,220,232,.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 75%, rgba(127,220,232,.06) 0%, transparent 50%),
+    linear-gradient(135deg, #060a12 0%, #080d18 50%, #050810 100%) !important;
+}
+
+/* Layer 1: Shimmer diagonal that crosses the screen */
+.model-sophocles::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 35%, rgba(127,220,232,.05) 50%, transparent 65%);
+  animation: sophShimmer 18s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes sophShimmer {
+  0%, 100% { opacity: 0; transform: translateX(-30%); }
+  50% { opacity: 1; transform: translateX(30%); }
+}
+
+/* Layer 2: Center pulse that breathes */
+.model-sophocles::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 30vw;
+  height: 30vw;
+  background: radial-gradient(circle, rgba(127,220,232,.07) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  animation: sophCenterBreathe 9s ease-in-out infinite;
+}
+
+@keyframes sophCenterBreathe {
+  0%, 100% { opacity: .4; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: .9; transform: translate(-50%, -50%) scale(1.2); }
+}
+
+/* Layer 3-4: Concentric rings rotating slowly via decorative pseudos on main */
+.model-sophocles #main {
+  position: relative;
+}
+
+.model-sophocles #main::before {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 80vw;
+  height: 80vw;
+  border: 1px solid rgba(127,220,232,.05);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: sophRotate 90s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.model-sophocles #main::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 60vw;
+  height: 60vw;
+  border: 1px solid rgba(127,220,232,.06);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: sophRotate 70s linear infinite reverse;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes sophRotate {
+  from { transform: translate(-50%, -50%) rotate(0); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Layer 5: Chat panel haze — soft cyan glow inside the chat area */
+/* Layer 5: Chat panel haze — soft cyan glow */
+
+.model-sophocles #chat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(127,220,232,.06) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 1;
+  animation: sophHazePulse 6s ease-in-out infinite;
+}
+
+@keyframes sophHazePulse {
+  0%, 100% { opacity: .3; }
+  50% { opacity: .8; }
+}
+
+/* Layer 6: Floating cyan band that drifts up and down inside chat */
+.model-sophocles #chat::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(180deg, transparent 0%, rgba(127,220,232,.12) 50%, transparent 100%);
+  filter: blur(20px);
+  pointer-events: none;
+  z-index: 1;
+  animation: sophBandFloat 14s ease-in-out infinite;
+}
+
+@keyframes sophBandFloat {
+  0%, 100% { top: -15%; opacity: .4; }
+  50% { top: 85%; opacity: .9; }
+}
+
+/* Make sure chat content stays above the cyan layers */
+.model-sophocles .chat-inner,
+.model-sophocles #topbar,
+.model-sophocles #input-wrap {
+  position: relative;
+  z-index: 2;
+}
+
+/* Sidebar gets a slight backdrop blur to feel layered over the cyan */
+.model-sophocles #sb {
+  background: rgba(8, 6, 3, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Tier pill colored cyan for Sophocles */
+.model-sophocles .it-model {
+  border-color: rgba(127,220,232,.4) !important;
+  color: #a0e8f0 !important;
+  text-shadow: 0 0 8px rgba(127,220,232,.3);
+}
+
+/* Cyan accent on assistant message bold text */
+.model-sophocles .msg.ai .msg-bubble strong {
+  color: #a0e8f0 !important;
 }
