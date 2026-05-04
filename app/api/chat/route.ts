@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
+import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -67,6 +69,86 @@ function buildSystemPrompt(model: ModelTier): string {
 
 function isValidModel(model: unknown): model is ModelTier {
   return typeof model === 'string' && ['sophocles', 'socrates', 'ares', 'athena'].includes(model);
+}
+
+function shouldFallback(error: any): boolean {
+  const status = error?.status || error?.response?.status;
+  // Do NOT fallback on 400 Bad Request
+  if (status === 400) return false;
+  return true;
+}
+
+async function callAIProvider(
+  messages: Message[],
+  systemPrompt: string
+): Promise<{ reply: string; provider: 'anthropic' | 'openai' | 'google' }> {
+  // 1. Try Anthropic
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: messages,
+    });
+    
+    const textContent = response.content[0];
+    if (textContent.type !== 'text') throw new Error('Unexpected response type');
+    
+    console.log('[Provider:anthropic] Success');
+    return { reply: textContent.text, provider: 'anthropic' };
+  } catch (error: any) {
+    console.error(`[Provider:anthropic] Failed: ${error.message || 'Unknown error'}`);
+    if (!shouldFallback(error)) throw error;
+  }
+
+  // 2. Try OpenAI
+  try {
+    console.log('[Provider:openai] Attempting fallback...');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const fullMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages
+    ];
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: fullMessages as any,
+    });
+    
+    console.log('[Provider:openai] Success');
+    return { reply: response.choices[0].message.content || '', provider: 'openai' };
+  } catch (error: any) {
+    console.error(`[Provider:openai] Failed: ${error.message || 'Unknown error'}`);
+    if (!shouldFallback(error)) throw error;
+  }
+
+  // 3. Try Gemini
+  try {
+    console.log('[Provider:google] Attempting fallback...');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    const googleModel = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
+      systemInstruction: systemPrompt 
+    });
+    
+    const formattedMessages = messages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+
+    const response = await googleModel.generateContent({
+      contents: formattedMessages
+    });
+    
+    console.log('[Provider:google] Success');
+    return { reply: response.response.text(), provider: 'google' };
+  } catch (error: any) {
+    console.error(`[Provider:google] Failed: ${error.message || 'Unknown error'}`);
+    if (!shouldFallback(error)) throw error;
+  }
+
+  // All failed
+  throw new Error('ALL_PROVIDERS_FAILED');
 }
 
 // Generate a short title from the first user message (max 50 chars)
@@ -152,19 +234,7 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: message },
     ];
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: buildSystemPrompt(model),
-      messages: messages,
-    });
-
-    const textContent = response.content[0];
-    if (textContent.type !== 'text') {
-      throw new Error('Unexpected response type from Claude');
-    }
-
-    const replyText = textContent.text;
+    const { reply: replyText, provider } = await callAIProvider(messages, buildSystemPrompt(model));
 
     // Save assistant message
     const { error: aiMsgError } = await supabase
@@ -187,11 +257,18 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       reply: replyText,
+      provider,
       conversationId: conversationId,
     });
 
   } catch (error) {
     console.error('Chat API error:', error);
+    if (error instanceof Error && error.message === 'ALL_PROVIDERS_FAILED') {
+      return NextResponse.json(
+        { error: 'All AI providers are temporarily unavailable. Please try again in a moment.' },
+        { status: 503 }
+      );
+    }
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { error: 'Failed to process request', details: errorMessage },
