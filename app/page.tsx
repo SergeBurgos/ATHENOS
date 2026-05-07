@@ -3,6 +3,8 @@ import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -544,11 +546,6 @@ export default function Home() {
         </div>
 
         <div className="sb-bottom">
-          <div className="sb-mode-switcher">
-            <button className="sb-mode-btn active">Chat</button>
-            <button className="sb-mode-btn" disabled>Voice</button>
-            <button className="sb-mode-btn" disabled>Both</button>
-          </div>
           <div className="sb-user-wrapper" ref={userMenuRef}>
             <div
               className="sb-user"
@@ -653,7 +650,15 @@ export default function Home() {
               messages.map((msg, i) => (
                 <div key={i} className={`msg ${msg.role === 'user' ? 'user' : 'ai'} msg-fade-in`}>
                   <div className="msg-name">{msg.role === 'user' ? 'You' : 'Athenos'}</div>
-                  <div className="msg-bubble">{msg.content}</div>
+                  <div className="msg-bubble">
+                    {msg.role === 'assistant' ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
                 </div>
               ))
             )}

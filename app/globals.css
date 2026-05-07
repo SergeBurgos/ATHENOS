@@ -1368,3 +1368,61 @@ body {
 .model-sophocles .msg.ai .msg-bubble strong {
   color: #a0e8f0 !important;
 }
+
+/* Hide scrollbars on chat input area */
+textarea::-webkit-scrollbar,
+.chat-input::-webkit-scrollbar,
+[contenteditable]::-webkit-scrollbar,
+input[type="text"]::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+textarea,
+.chat-input,
+[contenteditable],
+input[type="text"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Markdown rendering inside assistant message bubbles */
+.msg.ai .msg-bubble p {
+  margin: 0 0 1em 0;
+  line-height: 1.6;
+}
+.msg.ai .msg-bubble p:last-child {
+  margin-bottom: 0;
+}
+.msg.ai .msg-bubble ul,
+.msg.ai .msg-bubble ol {
+  margin: 0 0 1em 1.2em;
+  padding-left: 1em;
+}
+.msg.ai .msg-bubble li {
+  margin-bottom: 0.3em;
+}
+.msg.ai .msg-bubble code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.msg.ai .msg-bubble pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.8em 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0 0 1em 0;
+}
+.msg.ai .msg-bubble pre code {
+  background: transparent;
+  padding: 0;
+}
+.msg.ai .msg-bubble strong {
+  font-weight: 600;
+}
+.msg.ai .msg-bubble a {
+  color: var(--gold, #c9a961);
+  text-decoration: underline;
+}
