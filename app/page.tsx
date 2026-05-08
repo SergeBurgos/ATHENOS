@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import VoiceButton from '@/components/VoiceButton';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -697,7 +698,9 @@ export default function Home() {
                 disabled={loading}
               />
               <div className="input-toolbar">
-                <div className="it-left"></div>
+                <div className="it-left">
+                  <VoiceButton />
+                </div>
                 <div className="it-right" style={{ position: 'relative' }} ref={modelMenuRef}>
                   <button 
                     className={`it-model ${modelMenuOpen ? 'active' : ''}`}
