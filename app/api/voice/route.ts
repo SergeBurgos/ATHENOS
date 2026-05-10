@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { buildVoiceSystemPrompt } from '@/lib/athenos';
+import { readFile } from 'fs/promises';
+import path from 'path';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -10,6 +12,11 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const audioBlob = formData.get('audio') as Blob;
+    const historyStr = formData.get('history') as string;
+    let history: Array<{role: 'user'|'assistant', content: string}> = [];
+    try {
+      if (historyStr) history = JSON.parse(historyStr);
+    } catch(e) {}
 
     if (!audioBlob) {
       return NextResponse.json({ error: 'No audio provided' }, { status: 400 });
@@ -40,10 +47,15 @@ export async function POST(req: NextRequest) {
     }
 
     const sttData = await sttResponse.json();
-    const transcript = sttData.text;
+    const transcript = (sttData.text || '').trim();
 
-    if (!transcript || !transcript.trim()) {
-      return NextResponse.json({ error: 'No speech detected' }, { status: 400 });
+    const wordCount = transcript.split(/\s+/).filter(Boolean).length;
+    if (wordCount < 2) {
+      const fallbackPath = path.join(process.cwd(), 'public', 'audio', 'no-audio-detected.mp3');
+      const fallbackAudio = await readFile(fallbackPath);
+      return new NextResponse(fallbackAudio, {
+        headers: { 'Content-Type': 'audio/mpeg' },
+      });
     }
 
     // 2. LLM: Anthropic Haiku
@@ -51,7 +63,10 @@ export async function POST(req: NextRequest) {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 150,
       system: buildVoiceSystemPrompt(),
-      messages: [{ role: 'user', content: transcript }],
+      messages: [
+        ...history,
+        { role: 'user', content: transcript }
+      ],
     });
 
     const textContent = llmResponse.content[0];
@@ -90,6 +105,8 @@ export async function POST(req: NextRequest) {
     return new NextResponse(audioBuffer, {
       headers: {
         'Content-Type': 'audio/mpeg',
+        'X-User-Transcript': encodeURIComponent(transcript),
+        'X-Assistant-Reply': encodeURIComponent(replyText),
       },
     });
 

@@ -6,6 +6,7 @@ type State = 'idle' | 'recording' | 'processing' | 'playing';
 
 export default function VoiceButton() {
   const [state, setState] = useState<State>('idle');
+  const [history, setHistory] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -30,6 +31,7 @@ export default function VoiceButton() {
         
         const formData = new FormData();
         formData.append('audio', audioBlob);
+        formData.append('history', JSON.stringify(history));
 
         try {
           const response = await fetch('/api/voice', {
@@ -44,6 +46,12 @@ export default function VoiceButton() {
           const blob = await response.blob();
           const url = URL.createObjectURL(blob);
           
+          const userText = decodeURIComponent(response.headers.get('X-User-Transcript') || '');
+          const assistantText = decodeURIComponent(response.headers.get('X-Assistant-Reply') || '');
+          if (userText && assistantText) {
+            setHistory(prev => [...prev, { role: 'user' as const, content: userText }, { role: 'assistant' as const, content: assistantText }].slice(-10));
+          }
+
           setState('playing');
           const audio = new Audio(url);
           audioRef.current = audio;
