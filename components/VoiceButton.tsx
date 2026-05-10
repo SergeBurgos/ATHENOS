@@ -64,38 +64,55 @@ export default function VoiceButton() {
         formData.append('history', JSON.stringify(history));
 
         try {
-          const response = await fetch('/api/voice', {
-            method: 'POST',
-            body: formData,
-          });
+          const response = await fetch('/api/voice', { method: 'POST', body: formData });
+          if (!response.ok) throw new Error('API failed');
 
-          if (!response.ok) {
-            throw new Error('API failed');
-          }
-
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          
           const userText = decodeURIComponent(response.headers.get('X-User-Transcript') || '');
           const assistantText = decodeURIComponent(response.headers.get('X-Assistant-Reply') || '');
+
+          try {
+            if (!window.MediaSource || !response.body) throw new Error('Streaming not supported');
+            const audio = new Audio();
+            const mediaSource = new MediaSource();
+            audio.src = URL.createObjectURL(mediaSource);
+            audioRef.current = audio;
+            setState('playing');
+            audio.onended = () => setState('idle');
+            audio.onerror = () => setState('idle');
+
+            mediaSource.addEventListener('sourceopen', async () => {
+              const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+              const reader = response.body!.getReader();
+              const pump = async () => {
+                const { done, value } = await reader.read();
+                if (done) { 
+                  if (mediaSource.readyState === 'open') mediaSource.endOfStream(); 
+                  return; 
+                }
+                await new Promise<void>(r => {
+                  if (!sourceBuffer.updating) return r();
+                  sourceBuffer.addEventListener('updateend', () => r(), { once: true });
+                });
+                sourceBuffer.appendBuffer(value!);
+                pump();
+              };
+              pump();
+            });
+            await audio.play();
+          } catch (e) {
+            console.warn('Streaming playback fallback:', e);
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audioRef.current = audio;
+            setState('playing');
+            audio.onended = () => { setState('idle'); URL.revokeObjectURL(url); };
+            await audio.play().catch(() => setState('idle'));
+          }
+
           if (userText && assistantText) {
             setHistory(prev => [...prev, { role: 'user' as const, content: userText }, { role: 'assistant' as const, content: assistantText }].slice(-10));
           }
-
-          setState('playing');
-          const audio = new Audio(url);
-          audioRef.current = audio;
-
-          audio.onended = () => {
-            setState('idle');
-            URL.revokeObjectURL(url);
-          };
-
-          audio.play().catch(e => {
-            console.error('Playback failed', e);
-            setState('idle');
-          });
-
         } catch (error) {
           console.error('Processing failed:', error);
           setState('idle');

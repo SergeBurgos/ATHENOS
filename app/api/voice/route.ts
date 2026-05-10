@@ -58,25 +58,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. LLM: Anthropic Haiku
-    const llmResponse = await anthropic.messages.create({
+    // 2. LLM: Anthropic Haiku Streaming
+    const stream = anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 150,
       system: buildVoiceSystemPrompt(),
-      messages: [
-        ...history,
-        { role: 'user', content: transcript }
-      ],
+      messages: [...history, { role: 'user', content: transcript }],
     });
 
-    const textContent = llmResponse.content[0];
-    if (textContent.type !== 'text') {
-      throw new Error('Unexpected Claude response type');
+    let replyText = '';
+    for await (const chunk of stream) {
+      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+        replyText += chunk.delta.text;
+      }
     }
-    const replyText = textContent.text;
 
-    // 3. TTS: ElevenLabs
-    const ttsResponse = await fetch('https://api.elevenlabs.io/v1/text-to-speech/DGZn7qxTby0ozBhDeasK', {
+    // 3. TTS: ElevenLabs Streaming
+    const ttsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/DGZn7qxTby0ozBhDeasK/stream`, {
       method: 'POST',
       headers: {
         'xi-api-key': elevenLabsApiKey,
@@ -93,20 +91,19 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    if (!ttsResponse.ok) {
+    if (!ttsResponse.ok || !ttsResponse.body) {
       const err = await ttsResponse.text();
-      console.error('TTS failed:', err);
-      return NextResponse.json({ error: 'Text-to-speech failed' }, { status: 500 });
+      console.error('TTS streaming failed:', ttsResponse.status, err);
+      return NextResponse.json({ error: 'Text-to-speech streaming failed' }, { status: 500 });
     }
 
-    const audioBuffer = await ttsResponse.arrayBuffer();
-
-    // 4. Return audio
-    return new NextResponse(audioBuffer, {
+    // 4. Return streaming audio
+    return new Response(ttsResponse.body, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'X-User-Transcript': encodeURIComponent(transcript),
         'X-Assistant-Reply': encodeURIComponent(replyText),
+        'Transfer-Encoding': 'chunked',
       },
     });
 
