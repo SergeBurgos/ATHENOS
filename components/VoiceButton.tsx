@@ -4,6 +4,21 @@ import { useState, useRef, useEffect } from 'react';
 
 type State = 'idle' | 'recording' | 'processing' | 'playing';
 
+async function getAudioRMS(blob: Blob): Promise<number> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  const channelData = audioBuffer.getChannelData(0);
+  let sumSquares = 0;
+  for (let i = 0; i < channelData.length; i++) {
+    sumSquares += channelData[i] * channelData[i];
+  }
+  const rms = Math.sqrt(sumSquares / channelData.length);
+  audioContext.close();
+  return rms;
+}
+
+
 export default function VoiceButton() {
   const [state, setState] = useState<State>('idle');
   const [history, setHistory] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
@@ -29,6 +44,21 @@ export default function VoiceButton() {
         setState('processing');
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
+        try {
+          const rms = await getAudioRMS(audioBlob);
+          const SILENCE_THRESHOLD = 0.015;
+          if (rms < SILENCE_THRESHOLD) {
+            const fallbackAudio = new Audio('/audio/no-audio-detected.mp3');
+            setState('playing');
+            fallbackAudio.onended = () => setState('idle');
+            fallbackAudio.onerror = () => setState('idle');
+            await fallbackAudio.play();
+            return;
+          }
+        } catch (error) {
+          console.warn('Silence detection failed:', error);
+        }
+
         const formData = new FormData();
         formData.append('audio', audioBlob);
         formData.append('history', JSON.stringify(history));
