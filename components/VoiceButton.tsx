@@ -1,161 +1,19 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-
-type State = 'idle' | 'recording' | 'processing' | 'playing';
-
-async function getAudioRMS(blob: Blob): Promise<number> {
-  const arrayBuffer = await blob.arrayBuffer();
-  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-  const channelData = audioBuffer.getChannelData(0);
-  let sumSquares = 0;
-  for (let i = 0; i < channelData.length; i++) {
-    sumSquares += channelData[i] * channelData[i];
-  }
-  const rms = Math.sqrt(sumSquares / channelData.length);
-  audioContext.close();
-  return rms;
-}
-
+import { useVoiceAgent } from '@/lib/useVoiceAgent';
 
 export default function VoiceButton() {
-  const [state, setState] = useState<State>('idle');
-  const [history, setHistory] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<BlobPart[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const startRecording = async () => {
-    if (state !== 'idle') return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        setState('processing');
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
-        try {
-          const rms = await getAudioRMS(audioBlob);
-          const SILENCE_THRESHOLD = 0.015;
-          if (rms < SILENCE_THRESHOLD) {
-            const fallbackAudio = new Audio('/audio/no-audio-detected.mp3');
-            setState('playing');
-            fallbackAudio.onended = () => setState('idle');
-            fallbackAudio.onerror = () => setState('idle');
-            await fallbackAudio.play();
-            return;
-          }
-        } catch (error) {
-          console.warn('Silence detection failed:', error);
-        }
-
-        const formData = new FormData();
-        formData.append('audio', audioBlob);
-        formData.append('history', JSON.stringify(history));
-
-        try {
-          const response = await fetch('/api/voice', { method: 'POST', body: formData });
-          if (!response.ok) throw new Error('API failed');
-
-          const userText = decodeURIComponent(response.headers.get('X-User-Transcript') || '');
-          const assistantText = decodeURIComponent(response.headers.get('X-Assistant-Reply') || '');
-
-          try {
-            if (!window.MediaSource || !response.body) throw new Error('Streaming not supported');
-            const audio = new Audio();
-            const mediaSource = new MediaSource();
-            audio.src = URL.createObjectURL(mediaSource);
-            audioRef.current = audio;
-            setState('playing');
-            audio.onended = () => setState('idle');
-            audio.onerror = () => setState('idle');
-
-            mediaSource.addEventListener('sourceopen', async () => {
-              const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-              const reader = response.body!.getReader();
-              const pump = async () => {
-                const { done, value } = await reader.read();
-                if (done) { 
-                  if (mediaSource.readyState === 'open') mediaSource.endOfStream(); 
-                  return; 
-                }
-                await new Promise<void>(r => {
-                  if (!sourceBuffer.updating) return r();
-                  sourceBuffer.addEventListener('updateend', () => r(), { once: true });
-                });
-                sourceBuffer.appendBuffer(value!);
-                pump();
-              };
-              pump();
-            });
-            await audio.play();
-          } catch (e) {
-            console.warn('Streaming playback fallback:', e);
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const audio = new Audio(url);
-            audioRef.current = audio;
-            setState('playing');
-            audio.onended = () => { setState('idle'); URL.revokeObjectURL(url); };
-            await audio.play().catch(() => setState('idle'));
-          }
-
-          if (userText && assistantText) {
-            setHistory(prev => [...prev, { role: 'user' as const, content: userText }, { role: 'assistant' as const, content: assistantText }].slice(-10));
-          }
-        } catch (error) {
-          console.error('Processing failed:', error);
-          setState('idle');
-        }
-      };
-
-      mediaRecorder.start();
-      setState('recording');
-    } catch (err) {
-      console.error('Microphone access denied:', err);
-      setState('idle');
-    }
-  };
-
-  const stopRecording = () => {
-    if (state === 'recording' && mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-    }
-  };
-
-  // Handle cleanup
-  useEffect(() => {
-    return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    };
-  }, []);
+  const { state, startListening, stopListening } = useVoiceAgent();
 
   const getButtonStyles = () => {
     switch (state) {
       case 'idle':
         return 'bg-gray-800 text-gray-300 hover:bg-gray-700';
-      case 'recording':
+      case 'listening':
         return 'bg-red-600 text-white animate-pulse';
       case 'processing':
         return 'bg-yellow-600 text-white opacity-70 cursor-not-allowed';
-      case 'playing':
+      case 'speaking':
         return 'bg-green-600 text-white';
     }
   };
@@ -164,23 +22,23 @@ export default function VoiceButton() {
     switch (state) {
       case 'idle':
         return '🎙️';
-      case 'recording':
+      case 'listening':
         return '🔴';
       case 'processing':
         return '⏳';
-      case 'playing':
+      case 'speaking':
         return '🔊';
     }
   };
 
   return (
     <button
-      onMouseDown={startRecording}
-      onMouseUp={stopRecording}
-      onMouseLeave={stopRecording}
-      onTouchStart={startRecording}
-      onTouchEnd={stopRecording}
-      disabled={state === 'processing' || state === 'playing'}
+      onMouseDown={startListening}
+      onMouseUp={stopListening}
+      onMouseLeave={stopListening}
+      onTouchStart={startListening}
+      onTouchEnd={stopListening}
+      disabled={state === 'processing' || state === 'speaking'}
       className={`rounded-full p-2 ml-2 transition-colors duration-200 flex items-center justify-center w-10 h-10 ${getButtonStyles()}`}
       title={state === 'idle' ? 'Hold to talk to ATHENOS' : state}
     >
