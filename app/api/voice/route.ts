@@ -13,10 +13,10 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const audioBlob = formData.get('audio') as Blob;
     const historyStr = formData.get('history') as string;
-    let history: Array<{role: 'user'|'assistant', content: string}> = [];
+    let history: Array<{ role: 'user' | 'assistant', content: string }> = [];
     try {
       if (historyStr) history = JSON.parse(historyStr);
-    } catch(e) {}
+    } catch (e) { }
 
     if (!audioBlob) {
       return NextResponse.json({ error: 'No audio provided' }, { status: 400 });
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const transcript = (sttData.text || '').trim();
 
     const wordCount = transcript.split(/\s+/).filter(Boolean).length;
-    if (wordCount < 2) {
+    if (wordCount < 4) {
       const fallbackPath = path.join(process.cwd(), 'public', 'audio', 'no-audio-detected.mp3');
       const fallbackAudio = await readFile(fallbackPath);
       return new NextResponse(fallbackAudio, {

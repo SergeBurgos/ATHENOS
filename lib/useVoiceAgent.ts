@@ -59,7 +59,7 @@ export function useVoiceAgent() {
 
     try {
       const rms = await getAudioRMS(audioBlob);
-      const SILENCE_THRESHOLD = 0.015;
+      const SILENCE_THRESHOLD = 0.025;
       if (rms < SILENCE_THRESHOLD) {
         const fallbackAudio = new Audio('/audio/no-audio-detected.mp3');
         setState('speaking');
