@@ -26,7 +26,7 @@ async function getAudioRMS(blob: Blob): Promise<number> {
 export function useVoiceAgent() {
   const [state, setState] = useState<VoiceState>('idle');
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
-  
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -56,7 +56,7 @@ export function useVoiceAgent() {
 
   const processAudio = useCallback(async (audioBlob: Blob) => {
     setState('processing');
-    
+
     try {
       const rms = await getAudioRMS(audioBlob);
       const SILENCE_THRESHOLD = 0.015;
@@ -84,7 +84,7 @@ export function useVoiceAgent() {
       const assistantText = decodeURIComponent(response.headers.get('X-Assistant-Reply') || '');
 
       if (userText && assistantText) {
-        setTranscript(prev => [...prev, { role: 'user', content: userText }, { role: 'assistant', content: assistantText }].slice(-10));
+        setTranscript(prev => [...prev, { role: 'user' as const, content: userText }, { role: 'assistant' as const, content: assistantText }].slice(-10));
       }
 
       try {
@@ -102,9 +102,9 @@ export function useVoiceAgent() {
           const reader = response.body!.getReader();
           const pump = async () => {
             const { done, value } = await reader.read();
-            if (done) { 
-              if (mediaSource.readyState === 'open') mediaSource.endOfStream(); 
-              return; 
+            if (done) {
+              if (mediaSource.readyState === 'open') mediaSource.endOfStream();
+              return;
             }
             await new Promise<void>(r => {
               if (!sourceBuffer.updating) return r();
@@ -158,9 +158,9 @@ export function useVoiceAgent() {
       analyser.fftSize = 256;
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
-      
+
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      
+
       const checkSilence = () => {
         if (mediaRecorder.state !== 'recording') return;
         analyser.getByteTimeDomainData(dataArray);
@@ -170,7 +170,7 @@ export function useVoiceAgent() {
           sumSquares += normalized * normalized;
         }
         const rms = Math.sqrt(sumSquares / dataArray.length);
-        
+
         if (rms < 0.02) {
           if (silenceStartRef.current === null) {
             silenceStartRef.current = Date.now();
@@ -181,7 +181,7 @@ export function useVoiceAgent() {
         } else {
           silenceStartRef.current = null;
         }
-        
+
         silenceTimerRef.current = setTimeout(checkSilence, 100);
       };
 
