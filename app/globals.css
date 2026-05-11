@@ -329,6 +329,7 @@ body {
   flex-shrink: 0;
   background: rgba(6, 6, 6, 0.6);
   backdrop-filter: blur(20px);
+  position: relative;
 }
 
 .tb-left {
@@ -363,6 +364,37 @@ body {
   align-items: center;
   gap: 12px;
 }
+
+/* CHAT/VOICE NAV MODES */
+.nav-modes {
+  display: flex;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(201, 169, 97, 0.2);
+  border-radius: 8px;
+  padding: 3px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.nav-mode {
+  background: transparent;
+  display: inline-block;
+  padding: 8px 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #888;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.25s ease, background 0.25s ease;
+  text-decoration: none;
+}
+
+.nav-mode:hover { color: #fff; }
+.nav-mode.active { background: rgba(201, 169, 97, 0.35); color: #C9A961; }
 
 /* CHAT */
 #chat {

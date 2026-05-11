@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import VoiceButton from '@/components/VoiceButton';
+import Link from 'next/link';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -598,6 +598,10 @@ export default function Home() {
             </div>
             <div className="tb-tag">Chat</div>
           </div>
+          <nav className="nav-modes">
+            <Link href="/" className="nav-mode active">Chat</Link>
+            <Link href="/voice" className="nav-mode">Voice</Link>
+          </nav>
         </div>
 
         <div id="chat" ref={chatRef}>
@@ -699,10 +703,9 @@ export default function Home() {
               />
               <div className="input-toolbar">
                 <div className="it-left">
-                  <VoiceButton />
                 </div>
                 <div className="it-right" style={{ position: 'relative' }} ref={modelMenuRef}>
-                  <button 
+                  <button
                     className={`it-model ${modelMenuOpen ? 'active' : ''}`}
                     onClick={() => setModelMenuOpen(!modelMenuOpen)}
                     type="button"
@@ -717,17 +720,17 @@ export default function Home() {
                         <span className="model-menu-check">✓</span>
                       </button>
                       <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
-                        <span className="model-menu-icon" style={{color: 'var(--gold)'}}>🔒</span>
+                        <span className="model-menu-icon" style={{ color: 'var(--gold)' }}>🔒</span>
                         <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Socrates</span>
                         <span className="model-menu-sub">Coming soon</span>
                       </button>
                       <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
-                        <span className="model-menu-icon" style={{color: 'var(--gold)'}}>🔒</span>
+                        <span className="model-menu-icon" style={{ color: 'var(--gold)' }}>🔒</span>
                         <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Ares</span>
                         <span className="model-menu-sub">Coming soon</span>
                       </button>
                       <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
-                        <span className="model-menu-icon" style={{color: 'var(--gold)'}}>🔒</span>
+                        <span className="model-menu-icon" style={{ color: 'var(--gold)' }}>🔒</span>
                         <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Athena</span>
                         <span className="model-menu-sub">Coming soon</span>
                       </button>
