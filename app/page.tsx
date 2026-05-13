@@ -89,6 +89,8 @@ export default function Home() {
   const [currentModel, setCurrentModel] = useState<ModelTier>(DEFAULT_MODEL);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [comingSoonModalOpen, setComingSoonModalOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -135,6 +137,17 @@ export default function Home() {
       document.body.className = '';
     };
   }, [currentModel]);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      setSidebarOpen(!mobile);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const loadConversations = async () => {
     const supabase = createClient();
@@ -446,8 +459,29 @@ export default function Home() {
 
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {isMobile && !sidebarOpen && (
+        <button
+          className="sidebar-toggle-mobile"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open sidebar"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+      )}
+
+      {isMobile && sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <div id="sb">
+      <div id="sb" className={`${sidebarOpen ? 'open' : 'closed'} ${isMobile ? 'mobile' : 'desktop'}`}>
         <div className="sb-top">
           <div className="sb-logo">
             <svg width="20" height="26" viewBox="0 0 110 150" fill="none">
@@ -457,6 +491,19 @@ export default function Home() {
             </svg>
             <span className="sb-logo-word">Athenos</span>
           </div>
+
+          {!isMobile && (
+            <button
+              className="sidebar-collapse-desktop"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Collapse sidebar"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
+
           <button className="sb-new" onClick={newChat}>
             <span className="sb-new-icon">✦</span>
             New conversation
@@ -588,6 +635,18 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {!isMobile && !sidebarOpen && (
+        <button
+          className="sidebar-rail-desktop"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open sidebar"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
 
       {/* MAIN */}
       <div id="main">
