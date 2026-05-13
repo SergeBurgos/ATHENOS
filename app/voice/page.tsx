@@ -485,6 +485,57 @@ export default function VoicePage() {
           #waveform { height: 32px; margin-top: 18px; }
           .ctrl-placeholder { width: 44px; }
         }
+
+        @media (max-width: 768px) {
+          #nav {
+            padding: 0 16px;
+            padding-top: env(safe-area-inset-top, 0);
+            height: auto;
+            min-height: 64px;
+            flex-wrap: wrap;
+          }
+          .nav-mark {
+            font-size: 14px;
+            letter-spacing: 0.12em;
+          }
+          .nav-modes {
+            position: static;
+            transform: none;
+            order: 3;
+            flex: 1 1 100%;
+            justify-content: center;
+            margin-top: 8px;
+            padding-bottom: 8px;
+          }
+          .nav-mode {
+            padding: 6px 14px;
+            font-size: 10px;
+            letter-spacing: 0.15em;
+          }
+          .nav-user .nav-name {
+            display: none;
+          }
+          .nav-avatar {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+          }
+        }
+
+        @media (max-width: 375px) {
+          .nav-mark {
+            font-size: 12px;
+          }
+          .nav-mode {
+            padding: 5px 10px;
+            font-size: 9px;
+          }
+          .nav-avatar {
+            width: 26px;
+            height: 26px;
+            font-size: 11px;
+          }
+        }
       `}</style>
     </div>
   );
