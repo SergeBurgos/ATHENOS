@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const transcript = (sttData.text || '').trim();
 
     const wordCount = transcript.split(/\s+/).filter(Boolean).length;
-    if (wordCount < 4) {
+    if (wordCount < 3) {
       const fallbackPath = path.join(process.cwd(), 'public', 'audio', 'no-audio-detected.mp3');
       const fallbackAudio = await readFile(fallbackPath);
       return new NextResponse(fallbackAudio, {

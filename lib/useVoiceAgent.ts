@@ -26,6 +26,11 @@ async function getAudioRMS(blob: Blob): Promise<number> {
 export function useVoiceAgent() {
   const [state, setState] = useState<VoiceState>('idle');
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const transcriptRef = useRef<TranscriptEntry[]>([]);
+
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -74,7 +79,7 @@ export function useVoiceAgent() {
 
     const formData = new FormData();
     formData.append('audio', audioBlob);
-    formData.append('history', JSON.stringify(transcript));
+    formData.append('history', JSON.stringify(transcriptRef.current));
 
     try {
       const response = await fetch('/api/voice', { method: 'POST', body: formData });
@@ -99,11 +104,17 @@ export function useVoiceAgent() {
 
         mediaSource.addEventListener('sourceopen', async () => {
           const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+          let readerDone = false;
+          sourceBuffer.addEventListener('updateend', () => {
+            if (readerDone && !sourceBuffer.updating && mediaSource.readyState === 'open') {
+              try { mediaSource.endOfStream(); } catch (e) {}
+            }
+          });
           const reader = response.body!.getReader();
           const pump = async () => {
             const { done, value } = await reader.read();
             if (done) {
-              if (mediaSource.readyState === 'open') mediaSource.endOfStream();
+              readerDone = true;
               return;
             }
             await new Promise<void>(r => {
@@ -116,6 +127,14 @@ export function useVoiceAgent() {
           pump();
         });
         await audio.play();
+        const checkEnded = setInterval(() => {
+          if (audio.ended || (audio.paused && audio.currentTime > 0 && audio.currentTime >= audio.duration - 0.1)) {
+            clearInterval(checkEnded);
+            setState('idle');
+          }
+        }, 250);
+        audio.addEventListener('ended', () => clearInterval(checkEnded), { once: true });
+        audio.addEventListener('error', () => clearInterval(checkEnded), { once: true });
       } catch (e) {
         console.warn('Streaming playback fallback:', e);
         const blob = await response.blob();
@@ -130,7 +149,7 @@ export function useVoiceAgent() {
       console.error('Processing failed:', error);
       setState('idle');
     }
-  }, [transcript]);
+  }, []);
 
   const startListening = useCallback(async () => {
     if (state !== 'idle') return;
