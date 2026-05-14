@@ -814,7 +814,7 @@ body {
 @media (max-width: 768px) {
   #topbar {
     padding: 0 16px;
-    padding-top: env(safe-area-inset-top, 0);
+    padding-top: max(env(safe-area-inset-top, 0px), 16px);
     flex-wrap: wrap;
     min-height: 64px;
     height: auto;

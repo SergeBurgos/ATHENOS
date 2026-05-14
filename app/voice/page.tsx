@@ -489,7 +489,7 @@ export default function VoicePage() {
         @media (max-width: 768px) {
           #nav {
             padding: 0 16px;
-            padding-top: env(safe-area-inset-top, 0);
+            padding-top: max(env(safe-area-inset-top, 0px), 16px);
             height: auto;
             min-height: 64px;
             flex-wrap: wrap;
