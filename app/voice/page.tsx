@@ -64,8 +64,8 @@ export default function VoicePage() {
       <header id="nav">
         <span className="nav-mark">ATHENOS</span>
         <nav className="nav-modes">
-          <Link href="/" className="nav-mode">Chat</Link>
-          <Link href="/voice" className="nav-mode active">Voice</Link>
+          <a href="/" className="nav-mode active">Chat</a>
+          <a href="/voice" className="nav-mode">Voice</a>
         </nav>
         <div className="nav-right">
           <div className="nav-user">
