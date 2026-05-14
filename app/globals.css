@@ -1688,3 +1688,66 @@ input[type="text"] {
 #sb.mobile.closed {
   transform: translateX(-100%) !important;
 }
+
+/* CODE BLOCK WITH COPY BUTTON */
+.code-block-wrapper {
+  background: #1a1a1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.code-block-language {
+  font-family: var(--sans, 'Inter', sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.code-block-copy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: var(--sans, 'Inter', sans-serif);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+  min-height: 32px;
+}
+
+.code-block-copy:hover {
+  color: #C9A961;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.code-block-wrapper pre {
+  margin: 0;
+  padding: 14px;
+  background: transparent;
+  overflow-x: auto;
+}
+
+.code-block-wrapper code {
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(245, 240, 231, 0.9);
+}

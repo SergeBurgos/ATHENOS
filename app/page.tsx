@@ -70,6 +70,67 @@ function formatTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+function CodeBlock({ inline, className, children, ...props }: any) {
+  const [copied, setCopied] = useState(false);
+
+  const codeString = String(children).replace(/\n$/, '');
+  const hasLanguage = /language-(\w+)/.test(className || '');
+  const hasNewlines = codeString.includes('\n');
+
+  // Treat as inline if explicitly inline, OR if no language and no newlines
+  if (inline || (!hasLanguage && !hasNewlines)) {
+    return <code className={className} {...props}>{children}</code>;
+  }
+
+  const match = /language-(\w+)/.exec(className || '');
+  const language = match ? match[1] : 'text';
+
+  const codeText = codeString;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(codeText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  return (
+    <div className="code-block-wrapper">
+      <div className="code-block-header">
+        <span className="code-block-language">{language}</span>
+        <button
+          className="code-block-copy"
+          onClick={handleCopy}
+          aria-label="Copy code"
+        >
+          {copied ? (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              <span style={{ color: '#4ade80' }}>Copied</span>
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className={className} {...props}>
+        <code className={className}>{children}</code>
+      </pre>
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -716,7 +777,13 @@ export default function Home() {
                   <div className="msg-name">{msg.role === 'user' ? 'You' : 'Athenos'}</div>
                   <div className="msg-bubble">
                     {msg.role === 'assistant' ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code: CodeBlock,
+                          pre: ({ children }) => <>{children}</>,
+                        }}
+                      >
                         {msg.content}
                       </ReactMarkdown>
                     ) : (
