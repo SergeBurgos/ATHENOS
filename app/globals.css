@@ -819,8 +819,9 @@ body {
     padding-top: max(env(safe-area-inset-top, 0px), 32px);
     padding-bottom: 16px;
     flex-wrap: wrap;
-    min-height: 64px;
+    min-height: auto;
     height: auto;
+    align-items: flex-start;
   }
 
   .tb-left {

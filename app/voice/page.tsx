@@ -493,8 +493,9 @@ export default function VoicePage() {
             padding-top: 32px;
             padding-bottom: 16px;
             height: auto;
-            min-height: 64px;
+            min-height: auto;
             flex-wrap: wrap;
+            align-items: flex-start;
           }
           .nav-mark {
             font-size: 14px;
