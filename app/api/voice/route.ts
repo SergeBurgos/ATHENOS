@@ -23,22 +23,26 @@ export async function POST(req: NextRequest) {
     }
 
     const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
-    if (!elevenLabsApiKey) {
-      return NextResponse.json({ error: 'ElevenLabs API key missing' }, { status: 500 });
+    const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+
+    if (!elevenLabsApiKey || !deepgramApiKey) {
+      console.error('Missing API keys:', { elevenLabs: !!elevenLabsApiKey, deepgram: !!deepgramApiKey });
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
-    // 1. STT: ElevenLabs Scribe
-    const sttFormData = new FormData();
-    sttFormData.append('file', audioBlob);
-    sttFormData.append('model_id', 'scribe_v2');
-
-    const sttResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-      method: 'POST',
-      headers: {
-        'xi-api-key': elevenLabsApiKey,
-      },
-      body: sttFormData,
-    });
+    // 1. STT: Deepgram Nova-3
+    const audioBuffer = await audioBlob.arrayBuffer();
+    const sttResponse = await fetch(
+      'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&detect_language=true',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${deepgramApiKey}`,
+          'Content-Type': 'audio/webm',
+        },
+        body: audioBuffer,
+      }
+    );
 
     if (!sttResponse.ok) {
       const err = await sttResponse.text();
@@ -47,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     const sttData = await sttResponse.json();
-    const transcript = (sttData.text || '').trim();
+    const transcript = (sttData.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
 
     const wordCount = transcript.split(/\s+/).filter(Boolean).length;
     if (wordCount < 3) {

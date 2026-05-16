@@ -1,26 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { MicVAD } from '@ricky0123/vad-web';
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export interface TranscriptEntry {
   role: 'user' | 'assistant';
   content: string;
-}
-
-async function getAudioRMS(blob: Blob): Promise<number> {
-  const arrayBuffer = await blob.arrayBuffer();
-  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-  const channelData = audioBuffer.getChannelData(0);
-  let sumSquares = 0;
-  for (let i = 0; i < channelData.length; i++) {
-    sumSquares += channelData[i] * channelData[i];
-  }
-  const rms = Math.sqrt(sumSquares / channelData.length);
-  audioContext.close();
-  return rms;
 }
 
 export function useVoiceAgent() {
@@ -38,6 +25,8 @@ export function useVoiceAgent() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const silenceStartRef = useRef<number | null>(null);
+  const vadRef = useRef<any>(null);
+  const hadSpeechRef = useRef<boolean>(false);
 
   const cleanupAudio = useCallback(() => {
     if (audioContextRef.current) {
@@ -52,6 +41,11 @@ export function useVoiceAgent() {
   }, []);
 
   const stopListening = useCallback(() => {
+    if (vadRef.current) {
+      vadRef.current.pause();
+      vadRef.current.destroy();
+      vadRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -61,21 +55,6 @@ export function useVoiceAgent() {
 
   const processAudio = useCallback(async (audioBlob: Blob) => {
     setState('processing');
-
-    try {
-      const rms = await getAudioRMS(audioBlob);
-      const SILENCE_THRESHOLD = 0.025;
-      if (rms < SILENCE_THRESHOLD) {
-        const fallbackAudio = new Audio('/audio/no-audio-detected.mp3');
-        setState('speaking');
-        fallbackAudio.onended = () => setState('idle');
-        fallbackAudio.onerror = () => setState('idle');
-        await fallbackAudio.play();
-        return;
-      }
-    } catch (error) {
-      console.warn('Silence detection failed:', error);
-    }
 
     const formData = new FormData();
     formData.append('audio', audioBlob);
@@ -167,46 +146,38 @@ export function useVoiceAgent() {
 
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        if (!hadSpeechRef.current) {
+          const fallbackAudio = new Audio('/audio/no-audio-detected.mp3');
+          setState('speaking');
+          fallbackAudio.onended = () => setState('idle');
+          fallbackAudio.onerror = () => setState('idle');
+          fallbackAudio.play();
+          return;
+        }
+        
         processAudio(audioBlob);
       };
 
-      // Hybrid Tap-to-Listen: Auto-stop on silence
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioContext;
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      const source = audioContext.createMediaStreamSource(stream);
-      source.connect(analyser);
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      const checkSilence = () => {
-        if (mediaRecorder.state !== 'recording') return;
-        analyser.getByteTimeDomainData(dataArray);
-        let sumSquares = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          const normalized = (dataArray[i] - 128) / 128;
-          sumSquares += normalized * normalized;
-        }
-        const rms = Math.sqrt(sumSquares / dataArray.length);
-
-        if (rms < 0.02) {
-          if (silenceStartRef.current === null) {
-            silenceStartRef.current = Date.now();
-          } else if (Date.now() - silenceStartRef.current > 1500) {
-            stopListening();
-            return;
-          }
-        } else {
-          silenceStartRef.current = null;
-        }
-
-        silenceTimerRef.current = setTimeout(checkSilence, 100);
-      };
+      hadSpeechRef.current = false;
+      const vad = await MicVAD.new({
+        getStream: async () => stream,
+        onSpeechStart: () => {
+          hadSpeechRef.current = true;
+        },
+        onSpeechEnd: () => {
+          stopListening();
+        },
+        onVADMisfire: () => {
+        },
+        baseAssetPath: "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@latest/dist/",
+        onnxWASMBasePath: "https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/",
+      });
+      vadRef.current = vad;
+      vad.start();
 
       mediaRecorder.start();
       setState('listening');
-      checkSilence();
     } catch (err) {
       console.error('Microphone access denied:', err);
       setState('idle');
