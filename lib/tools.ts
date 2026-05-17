@@ -1,6 +1,7 @@
 // Tool definitions for Claude (Anthropic format)
+import type { Tool } from '@anthropic-ai/sdk/resources/messages';
 
-export const tools = [
+export const tools: Tool[] = [
   {
     name: "get_weather",
     description: "Get current weather and forecast for a location. Use when the user asks about weather, temperature, rain, humidity, wind, or asks how the weather will be in a specific place or time.",
@@ -21,7 +22,7 @@ export const tools = [
       required: ["location"],
     },
   },
-] as const;
+];
 
 // Tool execution: given a tool name and input, return the result string
 
