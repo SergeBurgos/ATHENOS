@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ModelTier, buildSystemPrompt } from '@/lib/athenos';
+import { tools, executeTool } from '@/lib/tools';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -33,18 +34,53 @@ async function callAIProvider(
 ): Promise<{ reply: string; provider: 'anthropic' | 'openai' | 'google' }> {
   // 1. Try Anthropic
   try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: messages,
-    });
+    let currentMessages: any[] = [...messages];
+    let replyText = '';
+    let iterations = 0;
+    const MAX_ITERATIONS = 3;
 
-    const textContent = response.content[0];
-    if (textContent.type !== 'text') throw new Error('Unexpected response type');
+    while (iterations < MAX_ITERATIONS) {
+      iterations++;
+      
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: systemPrompt,
+        tools: tools,
+        messages: currentMessages,
+      });
+
+      if (response.stop_reason === 'tool_use') {
+        const toolUseBlock = response.content.find((block: any) => block.type === 'tool_use') as any;
+        if (!toolUseBlock) break;
+
+        const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input);
+
+        currentMessages.push({
+          role: 'assistant',
+          content: response.content,
+        });
+        currentMessages.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: toolUseBlock.id,
+              content: toolResult,
+            },
+          ],
+        });
+      } else {
+        const textBlock = response.content.find((block: any) => block.type === 'text') as any;
+        replyText = textBlock?.text || '';
+        break;
+      }
+    }
+
+    if (!replyText) throw new Error('Unexpected response type');
 
     console.log('[Provider:anthropic] Success');
-    return { reply: textContent.text, provider: 'anthropic' };
+    return { reply: replyText, provider: 'anthropic' };
   } catch (error: any) {
     console.error(`[Provider:anthropic] Failed: ${error.message || 'Unknown error'}`);
     if (!shouldFallback(error)) throw error;

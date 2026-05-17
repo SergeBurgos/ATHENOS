@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { buildVoiceSystemPrompt } from '@/lib/athenos';
 import { readFile } from 'fs/promises';
 import path from 'path';
+import { tools, executeTool } from '@/lib/tools';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -62,18 +63,63 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. LLM: Anthropic Haiku Streaming
-    const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 150,
-      system: buildVoiceSystemPrompt(),
-      messages: [...history, { role: 'user', content: transcript }],
-    });
-
+    // 2. LLM: Anthropic Haiku Streaming with Tool Support
+    let currentMessages: any[] = [...history, { role: 'user', content: transcript }];
     let replyText = '';
-    for await (const chunk of stream) {
-      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-        replyText += chunk.delta.text;
+    let iterations = 0;
+    const MAX_ITERATIONS = 3;
+
+    while (iterations < MAX_ITERATIONS) {
+      iterations++;
+      
+      const stream = anthropic.messages.stream({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 150,
+        system: buildVoiceSystemPrompt(),
+        tools: tools,
+        messages: currentMessages,
+      });
+
+      let iterationReplyText = '';
+      let isToolUse = false;
+      let toolUseBlocks: any[] = [];
+      let currentContent: any[] = [];
+
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          iterationReplyText += event.delta.text;
+        }
+      }
+
+      const finalMessage = await stream.finalMessage();
+      currentContent = finalMessage.content;
+      
+      if (finalMessage.stop_reason === 'tool_use') {
+        isToolUse = true;
+        toolUseBlocks = currentContent.filter((block: any) => block.type === 'tool_use');
+      }
+
+      if (isToolUse && toolUseBlocks.length > 0) {
+        const toolUseBlock = toolUseBlocks[0];
+        const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input);
+
+        currentMessages.push({
+          role: 'assistant',
+          content: currentContent,
+        });
+        currentMessages.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: toolUseBlock.id,
+              content: toolResult,
+            },
+          ],
+        });
+      } else {
+        replyText = iterationReplyText;
+        break;
       }
     }
 
