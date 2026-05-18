@@ -67,11 +67,11 @@ export async function POST(req: NextRequest) {
     let currentMessages: any[] = [...history, { role: 'user', content: transcript }];
     let replyText = '';
     let iterations = 0;
-    const MAX_ITERATIONS = 3;
+    const MAX_ITERATIONS = 6;
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
-      
+
       const stream = anthropic.messages.stream({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 150,
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 
       const finalMessage = await stream.finalMessage();
       currentContent = finalMessage.content;
-      
+
       if (finalMessage.stop_reason === 'tool_use') {
         isToolUse = true;
         toolUseBlocks = currentContent.filter((block: any) => block.type === 'tool_use');
@@ -101,6 +101,18 @@ export async function POST(req: NextRequest) {
 
       if (isToolUse && toolUseBlocks.length > 0) {
         const toolUseBlock = toolUseBlocks[0];
+
+        // Server-side tools (web_search) are executed by Anthropic infrastructure.
+        // Their results are already embedded in currentContent — no manual execution needed.
+        if (toolUseBlock.name === 'web_search') {
+          currentMessages.push({
+            role: 'assistant',
+            content: currentContent,
+          });
+          continue;
+        }
+
+        // Client-side tools (get_weather) — execute locally and return result.
         const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input);
 
         currentMessages.push({
@@ -118,9 +130,21 @@ export async function POST(req: NextRequest) {
           ],
         });
       } else {
-        replyText = iterationReplyText;
+        const textBlocks = currentContent.filter((block: any) => block.type === 'text');
+        replyText = textBlocks.map((block: any) => block.text).join('');
         break;
       }
+    }
+
+    if (!replyText || replyText.trim().length === 0) {
+      const finalResponse = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: buildVoiceSystemPrompt(),
+        messages: currentMessages,
+      });
+      const textBlocks = finalResponse.content.filter((block: any) => block.type === 'text');
+      replyText = textBlocks.map((block: any) => block.text).join('') || 'No pude completar la búsqueda...';
     }
 
     // 3. TTS: ElevenLabs Streaming

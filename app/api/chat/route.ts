@@ -37,11 +37,11 @@ async function callAIProvider(
     let currentMessages: any[] = [...messages];
     let replyText = '';
     let iterations = 0;
-    const MAX_ITERATIONS = 3;
+    const MAX_ITERATIONS = 6;
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
-      
+
       const response = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
@@ -54,6 +54,17 @@ async function callAIProvider(
         const toolUseBlock = response.content.find((block: any) => block.type === 'tool_use') as any;
         if (!toolUseBlock) break;
 
+        // Server-side tools (web_search) are executed by Anthropic infrastructure.
+        // Their results are already embedded in response.content — no manual execution needed.
+        if (toolUseBlock.name === 'web_search') {
+          currentMessages.push({
+            role: 'assistant',
+            content: response.content,
+          });
+          continue;
+        }
+
+        // Client-side tools (get_weather) — execute locally and return result.
         const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input);
 
         currentMessages.push({
@@ -70,11 +81,23 @@ async function callAIProvider(
             },
           ],
         });
+
       } else {
-        const textBlock = response.content.find((block: any) => block.type === 'text') as any;
-        replyText = textBlock?.text || '';
+        const textBlocks = response.content.filter((block: any) => block.type === 'text');
+        replyText = textBlocks.map((block: any) => block.text).join('');
         break;
       }
+    }
+
+    if (!replyText || replyText.trim().length === 0) {
+      const finalResponse = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: currentMessages,
+      });
+      const textBlocks = finalResponse.content.filter((block: any) => block.type === 'text');
+      replyText = textBlocks.map((block: any) => block.text).join('') || 'No pude completar la búsqueda. ¿Podés reformular tu pregunta?';
     }
 
     if (!replyText) throw new Error('Unexpected response type');
