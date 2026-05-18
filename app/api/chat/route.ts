@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ModelTier, buildSystemPrompt } from '@/lib/athenos';
 import { tools, executeTool } from '@/lib/tools';
 
@@ -28,11 +27,32 @@ function shouldFallback(error: any): boolean {
   return true;
 }
 
+async function callAnthropicWithRetry(client: Anthropic, params: any, maxRetries = 2) {
+  let lastError: any = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await client.messages.create(params);
+    } catch (err: any) {
+      lastError = err;
+      // Only retry on 529 (overloaded) — other errors fail immediately
+      if (err.status !== 529 || attempt === maxRetries) {
+        throw err;
+      }
+      // Exponential backoff: 1s, 2s, 4s...
+      const delayMs = Math.pow(2, attempt) * 1000;
+      console.log(`[Provider:anthropic] 529 Overloaded, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 async function callAIProvider(
   messages: Message[],
   systemPrompt: string
-): Promise<{ reply: string; provider: 'anthropic' | 'openai' | 'google' }> {
+): Promise<{ reply: string; provider: 'anthropic' | 'openai' }> {
   // 1. Try Anthropic
+  console.log('[Provider:anthropic] Attempting...');
   try {
     let currentMessages: any[] = [...messages];
     let replyText = '';
@@ -42,7 +62,7 @@ async function callAIProvider(
     while (iterations < MAX_ITERATIONS) {
       iterations++;
 
-      const response = await client.messages.create({
+      const response = await callAnthropicWithRetry(client, {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: systemPrompt,
@@ -90,7 +110,7 @@ async function callAIProvider(
     }
 
     if (!replyText || replyText.trim().length === 0) {
-      const finalResponse = await client.messages.create({
+      const finalResponse = await callAnthropicWithRetry(client, {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: systemPrompt,
@@ -105,58 +125,37 @@ async function callAIProvider(
     console.log('[Provider:anthropic] Success');
     return { reply: replyText, provider: 'anthropic' };
   } catch (error: any) {
-    console.error(`[Provider:anthropic] Failed: ${error.message || 'Unknown error'}`);
+    console.error(`[Provider:anthropic] Failed after retries: ${error.message || 'Unknown error'}`);
     if (!shouldFallback(error)) throw error;
   }
 
   // 2. Try OpenAI
-  try {
-    console.log('[Provider:openai] Attempting fallback...');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const fullMessages = [
-      { role: 'system', content: systemPrompt },
-      ...messages
-    ];
+  if (process.env.ENABLE_OPENAI_FALLBACK === 'true') {
+    try {
+      console.log('[Provider:openai] Attempting fallback...');
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const fullMessages = [
+        { role: 'system', content: systemPrompt },
+        ...messages
+      ];
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: fullMessages as any,
-    });
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: fullMessages as any,
+      });
 
-    console.log('[Provider:openai] Success');
-    return { reply: response.choices[0].message.content || '', provider: 'openai' };
-  } catch (error: any) {
-    console.error(`[Provider:openai] Failed: ${error.message || 'Unknown error'}`);
-    if (!shouldFallback(error)) throw error;
-  }
-
-  // 3. Try Gemini
-  try {
-    console.log('[Provider:google] Attempting fallback...');
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const googleModel = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: systemPrompt
-    });
-
-    const formattedMessages = messages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    }));
-
-    const response = await googleModel.generateContent({
-      contents: formattedMessages
-    });
-
-    console.log('[Provider:google] Success');
-    return { reply: response.response.text(), provider: 'google' };
-  } catch (error: any) {
-    console.error(`[Provider:google] Failed: ${error.message || 'Unknown error'}`);
-    if (!shouldFallback(error)) throw error;
+      console.log('[Provider:openai] Success');
+      return { reply: response.choices[0].message.content || '', provider: 'openai' };
+    } catch (error: any) {
+      console.error(`[Provider:openai] Failed: ${error.message || 'Unknown error'}`);
+      if (!shouldFallback(error)) throw error;
+    }
+  } else {
+    console.log('[Provider:openai] Skipped (ENABLE_OPENAI_FALLBACK not set)');
   }
 
   // All failed
-  throw new Error('ALL_PROVIDERS_FAILED');
+  throw new Error('NO_PROVIDER_AVAILABLE');
 }
 
 // Generate a short title from the first user message (max 50 chars)
@@ -271,7 +270,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Chat API error:', error);
-    if (error instanceof Error && error.message === 'ALL_PROVIDERS_FAILED') {
+    if (error instanceof Error && (error.message === 'ALL_PROVIDERS_FAILED' || error.message === 'NO_PROVIDER_AVAILABLE')) {
       return NextResponse.json(
         { error: 'All AI providers are temporarily unavailable. Please try again in a moment.' },
         { status: 503 }
