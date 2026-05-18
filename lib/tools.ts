@@ -22,6 +22,11 @@ export const tools: Tool[] = [
       required: ["location"],
     },
   },
+  {
+    type: "web_search_20250305",
+    name: "web_search",
+    max_uses: 3,
+  } as any,
 ];
 
 // Tool execution: given a tool name and input, return the result string
