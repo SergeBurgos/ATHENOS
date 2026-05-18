@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
 import { ModelTier, buildSystemPrompt } from '@/lib/athenos';
 import { tools, executeTool } from '@/lib/tools';
+import { getUserMemories, formatMemoriesForPrompt, extractFact, saveMemory } from '@/lib/memory';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -49,7 +50,7 @@ async function callAnthropicWithRetry(client: Anthropic, params: any, maxRetries
 
 async function callAIProvider(
   messages: Message[],
-  systemPrompt: string
+  enhancedSystemPrompt: string
 ): Promise<{ reply: string; provider: 'anthropic' | 'openai' }> {
   // 1. Try Anthropic
   console.log('[Provider:anthropic] Attempting...');
@@ -65,7 +66,7 @@ async function callAIProvider(
       const response = await callAnthropicWithRetry(client, {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
-        system: systemPrompt,
+        system: enhancedSystemPrompt,
         tools: tools,
         messages: currentMessages,
       });
@@ -113,7 +114,7 @@ async function callAIProvider(
       const finalResponse = await callAnthropicWithRetry(client, {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
-        system: systemPrompt,
+        system: enhancedSystemPrompt,
         messages: currentMessages,
       });
       const textBlocks = finalResponse.content.filter((block: any) => block.type === 'text');
@@ -135,7 +136,7 @@ async function callAIProvider(
       console.log('[Provider:openai] Attempting fallback...');
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const fullMessages = [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: enhancedSystemPrompt },
         ...messages
       ];
 
@@ -197,6 +198,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const systemPrompt = buildSystemPrompt(model);
+
+    // Fetch user memories
+    let memories: string[] = [];
+    if (user) {
+      memories = await getUserMemories(supabase, user.id);
+    }
+    
+    // Inject memories into system prompt
+    const memoryContext = formatMemoriesForPrompt(memories);
+    const enhancedSystemPrompt = memoryContext 
+      ? `${systemPrompt}\n\n${memoryContext}` 
+      : systemPrompt;
+
     // Determine conversation: use incoming ID or create new
     let conversationId = incomingConvId;
 
@@ -241,7 +256,7 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: message },
     ];
 
-    const { reply: replyText, provider } = await callAIProvider(messages, buildSystemPrompt(model));
+    const { reply: replyText, provider } = await callAIProvider(messages, enhancedSystemPrompt);
 
     // Save assistant message
     const { error: aiMsgError } = await supabase
@@ -261,6 +276,24 @@ export async function POST(req: NextRequest) {
       .from('conversations')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', conversationId);
+
+    // Fire-and-forget: extract and save memory in background
+    // Don't await — user gets response immediately
+    if (user && messages.length > 0) {
+      const lastUserMessage = messages[messages.length - 1].content;
+      
+      // Run in background (don't block response)
+      (async () => {
+        try {
+          const fact = await extractFact(client, lastUserMessage, memories);
+          if (fact) {
+            await saveMemory(supabase, user.id, fact);
+          }
+        } catch (err) {
+          console.error('Background memory task failed:', err);
+        }
+      })();
+    }
 
     return NextResponse.json({
       reply: replyText,
