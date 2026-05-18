@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
 import { buildVoiceSystemPrompt } from '@/lib/athenos';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { tools, executeTool } from '@/lib/tools';
+import { getUserMemories, formatMemoriesForPrompt, extractFact, saveMemory } from '@/lib/memory';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -39,7 +41,7 @@ async function callAnthropicWithRetry(client: Anthropic, params: any, maxRetries
 
 async function callAIProvider(
   messages: any[],
-  systemPrompt: string
+  enhancedSystemPrompt: string
 ): Promise<{ reply: string; provider: 'anthropic' | 'openai' }> {
   // 1. Try Anthropic
   console.log('[Provider:anthropic] Attempting...');
@@ -55,7 +57,7 @@ async function callAIProvider(
       const finalMessage = await callAnthropicWithRetry(anthropic, {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 150,
-        system: systemPrompt,
+        system: enhancedSystemPrompt,
         tools: tools,
         messages: currentMessages,
       });
@@ -110,7 +112,7 @@ async function callAIProvider(
       const finalResponse = await callAnthropicWithRetry(anthropic, {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
-        system: systemPrompt,
+        system: enhancedSystemPrompt,
         messages: currentMessages,
       });
       const textBlocks = finalResponse.content.filter((block: any) => block.type === 'text');
@@ -130,7 +132,7 @@ async function callAIProvider(
       console.log('[Provider:openai] Attempting fallback...');
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const fullMessages = [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: enhancedSystemPrompt },
         ...messages
       ];
 
@@ -198,6 +200,20 @@ export async function POST(req: NextRequest) {
     const sttData = await sttResponse.json();
     const transcript = (sttData.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
 
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    let memories: string[] = [];
+    if (user) {
+      memories = await getUserMemories(supabase, user.id);
+    }
+
+    const systemPrompt = buildVoiceSystemPrompt();
+    const memoryContext = formatMemoriesForPrompt(memories);
+    const enhancedSystemPrompt = memoryContext 
+      ? `${systemPrompt}\n\n${memoryContext}` 
+      : systemPrompt;
+
     const wordCount = transcript.split(/\s+/).filter(Boolean).length;
     if (wordCount < 3) {
       const fallbackPath = path.join(process.cwd(), 'public', 'audio', 'no-audio-detected.mp3');
@@ -209,7 +225,20 @@ export async function POST(req: NextRequest) {
 
     // 2. LLM: AI Provider with Tool Support
     const messages = [...history, { role: 'user', content: transcript }];
-    const { reply: replyText } = await callAIProvider(messages, buildVoiceSystemPrompt());
+    const { reply: replyText } = await callAIProvider(messages, enhancedSystemPrompt);
+
+    if (user && transcript) {
+      (async () => {
+        try {
+          const fact = await extractFact(anthropic, transcript, memories);
+          if (fact) {
+            await saveMemory(supabase, user.id, fact);
+          }
+        } catch (err) {
+          console.error('Background memory task failed:', err);
+        }
+      })();
+    }
 
     // 3. TTS: ElevenLabs Streaming
     const ttsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/DGZn7qxTby0ozBhDeasK/stream`, {
