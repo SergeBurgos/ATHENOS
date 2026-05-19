@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
-import { buildVoiceSystemPrompt } from '@/lib/athenos';
+import { ModelTier, buildSystemPrompt, MODEL_BY_TIER } from '@/lib/athenos';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { tools, executeTool } from '@/lib/tools';
@@ -41,7 +41,8 @@ async function callAnthropicWithRetry(client: Anthropic, params: any, maxRetries
 
 async function callAIProvider(
   messages: any[],
-  enhancedSystemPrompt: string
+  enhancedSystemPrompt: string,
+  model: ModelTier
 ): Promise<{ reply: string; provider: 'anthropic' | 'openai' }> {
   // 1. Try Anthropic
   console.log('[Provider:anthropic] Attempting...');
@@ -55,7 +56,7 @@ async function callAIProvider(
       iterations++;
 
       const finalMessage = await callAnthropicWithRetry(anthropic, {
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL_BY_TIER[model],
         max_tokens: 150,
         system: enhancedSystemPrompt,
         tools: tools,
@@ -110,7 +111,7 @@ async function callAIProvider(
 
     if (!replyText || replyText.trim().length === 0) {
       const finalResponse = await callAnthropicWithRetry(anthropic, {
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL_BY_TIER[model],
         max_tokens: 1024,
         system: enhancedSystemPrompt,
         messages: currentMessages,
@@ -208,7 +209,12 @@ export async function POST(req: NextRequest) {
       memories = await getUserMemories(supabase, user.id);
     }
 
-    const systemPrompt = buildVoiceSystemPrompt();
+    // Voice mode currently supports only Sophocles persona.
+    // Athena uses Opus which is too slow for real-time voice interaction.
+    const model: ModelTier = 'sophocles';
+    
+    // Use model-specific system prompt
+    const systemPrompt = buildSystemPrompt(model);
     const memoryContext = formatMemoriesForPrompt(memories);
     const enhancedSystemPrompt = memoryContext 
       ? `${systemPrompt}\n\n${memoryContext}` 
@@ -225,7 +231,7 @@ export async function POST(req: NextRequest) {
 
     // 2. LLM: AI Provider with Tool Support
     const messages = [...history, { role: 'user', content: transcript }];
-    const { reply: replyText } = await callAIProvider(messages, enhancedSystemPrompt);
+    const { reply: replyText } = await callAIProvider(messages, enhancedSystemPrompt, model);
 
     if (user && transcript) {
       (async () => {

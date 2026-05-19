@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
-import { ModelTier, buildSystemPrompt } from '@/lib/athenos';
+import { ModelTier, buildSystemPrompt, MODEL_BY_TIER } from '@/lib/athenos';
 import { tools, executeTool } from '@/lib/tools';
 import { getUserMemories, formatMemoriesForPrompt, extractFact, saveMemory } from '@/lib/memory';
 
@@ -15,10 +15,22 @@ interface Message {
   content: string;
 }
 
-const AVAILABLE_MODELS: ModelTier[] = ['sophocles'];
+const AVAILABLE_MODELS: ModelTier[] = ['sophocles', 'athena'];
 
 function isValidModel(model: unknown): model is ModelTier {
   return typeof model === 'string' && ['sophocles', 'socrates', 'ares', 'athena'].includes(model);
+}
+
+// Check if user has access to a specific persona tier
+// Currently a placeholder — will be replaced with real Stripe/Paddle subscription check
+async function userHasAccessToTier(userId: string | undefined, tier: ModelTier): Promise<boolean> {
+  // Sophocles is free for all (including anonymous)
+  if (tier === 'sophocles') return true;
+  
+  // All other tiers require Strategist subscription
+  // PLACEHOLDER: currently always returns false (no paid users yet)
+  // TODO: when Stripe/Paddle integration lands, query user's subscription status here
+  return false;
 }
 
 function shouldFallback(error: any): boolean {
@@ -50,7 +62,8 @@ async function callAnthropicWithRetry(client: Anthropic, params: any, maxRetries
 
 async function callAIProvider(
   messages: Message[],
-  enhancedSystemPrompt: string
+  enhancedSystemPrompt: string,
+  model: ModelTier
 ): Promise<{ reply: string; provider: 'anthropic' | 'openai' }> {
   // 1. Try Anthropic
   console.log('[Provider:anthropic] Attempting...');
@@ -64,7 +77,7 @@ async function callAIProvider(
       iterations++;
 
       const response = await callAnthropicWithRetry(client, {
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL_BY_TIER[model],
         max_tokens: 1024,
         system: enhancedSystemPrompt,
         tools: tools,
@@ -112,7 +125,7 @@ async function callAIProvider(
 
     if (!replyText || replyText.trim().length === 0) {
       const finalResponse = await callAnthropicWithRetry(client, {
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL_BY_TIER[model],
         max_tokens: 1024,
         system: enhancedSystemPrompt,
         messages: currentMessages,
@@ -198,6 +211,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Gating: check if user has access to selected persona
+    const hasAccess = await userHasAccessToTier(user?.id, model);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { 
+          error: 'STRATEGIST_REQUIRED', 
+          message: `${model} is available on Strategist plan only. Upgrade to access deep reasoning.`,
+          upgradeUrl: '/upgrade'
+        },
+        { status: 403 }
+      );
+    }
+
     const systemPrompt = buildSystemPrompt(model);
 
     // Fetch user memories
@@ -256,7 +282,7 @@ export async function POST(req: NextRequest) {
       { role: 'user', content: message },
     ];
 
-    const { reply: replyText, provider } = await callAIProvider(messages, enhancedSystemPrompt);
+    const { reply: replyText, provider } = await callAIProvider(messages, enhancedSystemPrompt, model);
 
     // Save assistant message
     const { error: aiMsgError } = await supabase
