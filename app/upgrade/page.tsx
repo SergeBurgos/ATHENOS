@@ -17,8 +17,30 @@ export default function UpgradePage() {
   }, []);
 
   return (
-    <div className="w-full min-h-screen bg-[#0a0805] text-[#f5f0e7] font-sans antialiased flex flex-col justify-between py-12 px-4 md:px-8">
-      <div className="w-full max-w-[900px] mx-auto flex-grow flex flex-col justify-center py-4 px-2 md:px-6">
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: '#0a0805',
+        color: '#f5f0e7',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        padding: '48px 16px',
+        boxSizing: 'border-box',
+        zIndex: 9999,
+      }}
+      className="font-sans antialiased"
+    >
+      <div className="w-full max-w-[900px] flex-grow flex flex-col justify-center py-4 px-2 md:px-6">
         {/* Header */}
         <div className="text-center mb-12 w-full flex flex-col items-center">
           <div className="flex justify-center mb-4">
@@ -154,7 +176,16 @@ export default function UpgradePage() {
         <div className="bg-gradient-to-r from-[#0d0a06] to-[#0a0805] border border-[#C9A035]/30 rounded-xl p-8 w-full text-center">
           <h3 className="text-sm font-semibold text-[#C9A035] uppercase tracking-widest mb-3">Athena Spotlight</h3>
           <h4 className="text-2xl font-serif font-light text-[#f5f0e7] mb-4">Deep Reasoning & Strategic Analysis</h4>
-          <p className="text-sm text-[#7a7870] font-light leading-relaxed max-w-xl mx-auto">
+          <p
+            style={{
+              textAlign: 'center' as const,
+              margin: '0 auto',
+              maxWidth: '576px',
+              display: 'block',
+              width: '100%',
+            }}
+            className="text-sm text-[#7a7870] font-light leading-relaxed"
+          >
             Athena is designed for strategic analysis, surfacing what you are missing, and executing deep reasoning tasks. 
             It analyzes business problems systematically, addresses blind spots in your plans, and suggests actionable next steps.
           </p>
@@ -162,7 +193,7 @@ export default function UpgradePage() {
       </div>
 
       {/* Footer / Back Link */}
-      <div className="text-center mt-12 w-full">
+      <div className="text-center mt-12 w-full max-w-[900px]">
         <Link
           href="/"
           className="text-xs text-[#7a7870] hover:text-[#f5f0e7] tracking-wider uppercase transition-colors duration-200"
