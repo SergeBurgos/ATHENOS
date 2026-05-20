@@ -147,16 +147,15 @@ export default function Home() {
   const [editTitle, setEditTitle] = useState('');
   const [deleteConfirmConv, setDeleteConfirmConv] = useState<Conversation | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [currentModel, setCurrentModel] = useState<ModelTier>(DEFAULT_MODEL);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [comingSoonModalOpen, setComingSoonModalOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<ModelTier>('sophocles');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const convMenuRef = useRef<HTMLDivElement>(null);
-  const modelMenuRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -180,24 +179,24 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(STORAGE_KEY_MODEL);
+    const stored = window.sessionStorage.getItem('athenos_selected_model');
     if (stored && (stored === 'sophocles' || stored === 'socrates' || stored === 'ares' || stored === 'athena')) {
-      setCurrentModel(stored as ModelTier);
+      setSelectedModel(stored as ModelTier);
     }
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(STORAGE_KEY_MODEL, currentModel);
-  }, [currentModel]);
+    window.sessionStorage.setItem('athenos_selected_model', selectedModel);
+  }, [selectedModel]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    document.body.className = `model-${currentModel}`;
+    document.body.className = `model-${selectedModel}`;
     return () => {
       document.body.className = '';
     };
-  }, [currentModel]);
+  }, [selectedModel]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -241,8 +240,8 @@ export default function Home() {
       if (convMenuRef.current && !convMenuRef.current.contains(event.target as Node)) {
         setConvMenuOpen(null);
       }
-      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
-        setModelMenuOpen(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -266,6 +265,9 @@ export default function Home() {
     return () => document.removeEventListener('keydown', handleEsc);
   }, [deleteConfirmConv]);
   const handleSignOut = async () => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem('athenos_selected_model');
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     setMenuOpen(false);
@@ -440,9 +442,17 @@ export default function Home() {
           message: messageText,
           history: messages,
           conversationId: conversationId,
-          model: currentModel,
+          model: selectedModel,
         }),
       });
+
+      if (response.status === 403) {
+        const errData = await response.json();
+        if (errData.error === 'STRATEGIST_REQUIRED') {
+          router.push(errData.upgradeUrl || '/upgrade');
+          return;
+        }
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -813,7 +823,92 @@ export default function Home() {
 
         <div id="input-wrap">
           <div className="input-inner">
-            <div className="input-box">
+            {/* Persona Dropdown Selector */}
+            <div className="persona-selector-container" ref={dropdownRef}>
+              <button
+                type="button"
+                className={`persona-selector-trigger ${selectedModel}`}
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <span className="persona-selector-active-dot"></span>
+                <span className="persona-selector-label">
+                  {selectedModel === 'sophocles' && 'Sophocles — Fast'}
+                  {selectedModel === 'athena' && 'Athena — Deep · Strategist'}
+                  {selectedModel === 'socrates' && 'Socrates — Coming soon'}
+                  {selectedModel === 'ares' && 'Ares — Coming soon'}
+                </span>
+                <svg
+                  className={`persona-selector-chevron ${isDropdownOpen ? 'open' : ''}`}
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {isDropdownOpen && (
+                <div className="persona-dropdown-menu">
+                  {/* Sophocles */}
+                  <button
+                    type="button"
+                    className={`persona-dropdown-item sophocles ${selectedModel === 'sophocles' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSelectedModel('sophocles');
+                      setIsDropdownOpen(false);
+                    }}
+                  >
+                    <span className="persona-item-dot sophocles"></span>
+                    <span className="persona-item-name">Sophocles</span>
+                    <span className="persona-item-desc">— Fast</span>
+                  </button>
+
+                  {/* Athena */}
+                  <button
+                    type="button"
+                    className={`persona-dropdown-item athena ${selectedModel === 'athena' ? 'active' : ''}`}
+                    onClick={() => {
+                      // ALL users go to /upgrade for now (Stripe integration pending)
+                      // TODO: when Stripe integrated, check user.subscription_tier === 'strategist' before setting state
+                      router.push('/upgrade');
+                      setIsDropdownOpen(false);
+                    }}
+                  >
+                    <span className="persona-item-dot athena"></span>
+                    <span className="persona-item-name">Athena</span>
+                    <span className="persona-item-desc">— Deep · Strategist</span>
+                    <span className="persona-premium-badge">Strategist</span>
+                  </button>
+
+                  {/* Socrates */}
+                  <div
+                    className="persona-dropdown-item disabled"
+                    title="Coming soon"
+                  >
+                    <span className="persona-item-dot disabled"></span>
+                    <span className="persona-item-name">Socrates</span>
+                    <span className="persona-item-desc">— Coming soon</span>
+                  </div>
+
+                  {/* Ares */}
+                  <div
+                    className="persona-dropdown-item disabled"
+                    title="Coming soon"
+                  >
+                    <span className="persona-item-dot disabled"></span>
+                    <span className="persona-item-name">Ares</span>
+                    <span className="persona-item-desc">— Coming soon</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className={`input-box ${selectedModel === 'athena' ? 'athena-active' : 'sophocles-active'}`}>
               <textarea
                 ref={textareaRef}
                 id="inp"
@@ -830,38 +925,7 @@ export default function Home() {
               <div className="input-toolbar">
                 <div className="it-left">
                 </div>
-                <div className="it-right" style={{ position: 'relative' }} ref={modelMenuRef}>
-                  <button
-                    className={`it-model ${modelMenuOpen ? 'active' : ''}`}
-                    onClick={() => setModelMenuOpen(!modelMenuOpen)}
-                    type="button"
-                  >
-                    Athenos {currentModel.charAt(0).toUpperCase() + currentModel.slice(1)}
-                  </button>
-                  {modelMenuOpen && (
-                    <div className="model-menu">
-                      <button className="model-menu-item" onClick={() => setModelMenuOpen(false)}>
-                        <span className="model-menu-icon" style={{ opacity: 0 }}></span>
-                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Sophocles</span>
-                        <span className="model-menu-check">✓</span>
-                      </button>
-                      <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
-                        <span className="model-menu-icon" style={{ color: 'var(--gold)' }}>🔒</span>
-                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Socrates</span>
-                        <span className="model-menu-sub">Coming soon</span>
-                      </button>
-                      <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
-                        <span className="model-menu-icon" style={{ color: 'var(--gold)' }}>🔒</span>
-                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Ares</span>
-                        <span className="model-menu-sub">Coming soon</span>
-                      </button>
-                      <button className="model-menu-item disabled" onClick={() => { setComingSoonModalOpen(true); setModelMenuOpen(false); }}>
-                        <span className="model-menu-icon" style={{ color: 'var(--gold)' }}>🔒</span>
-                        <span className="model-menu-label" style={{ flex: 1, textAlign: 'left' }}>Athenos Athena</span>
-                        <span className="model-menu-sub">Coming soon</span>
-                      </button>
-                    </div>
-                  )}
+                <div className="it-right">
                   <button
                     id="send-btn"
                     type="button"
@@ -879,25 +943,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      {comingSoonModalOpen && (
-        <div className="modal-backdrop" onClick={() => setComingSoonModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">Coming soon</div>
-            <div className="modal-body">
-              This model will be available when ATHENOS launches its full Strategist plan.
-            </div>
-            <div className="modal-actions">
-              <button
-                className="modal-btn modal-btn-cancel"
-                onClick={() => setComingSoonModalOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {deleteConfirmConv && (
         <div className="modal-backdrop" onClick={cancelDelete}>

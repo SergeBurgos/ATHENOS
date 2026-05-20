@@ -38,6 +38,8 @@ body {
   font-family: var(--sans);
 }
 
+
+
 /* SIDEBAR */
 #sb {
   width: var(--sb);
@@ -1765,4 +1767,276 @@ input[type="text"] {
   font-size: 13px;
   line-height: 1.55;
   color: rgba(245, 240, 231, 0.9);
+}
+
+/* ════════════════════════════════════════════════════════════
+   PERSONA SELECTOR DROPDOWN & MODEL ACCENTS
+   ════════════════════════════════════════════════════════════ */
+
+.persona-selector-container {
+  position: relative;
+  margin-bottom: 10px;
+  display: inline-block;
+  z-index: 10;
+}
+
+.persona-selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--s2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--white);
+  transition: all 0.2s ease;
+  user-select: none;
+  backdrop-filter: blur(10px);
+}
+
+.persona-selector-trigger:hover {
+  background: var(--s3);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.persona-selector-trigger.sophocles {
+  border-color: rgba(127, 220, 232, 0.25);
+  box-shadow: 0 0 10px rgba(127, 220, 232, 0.03);
+}
+
+.persona-selector-trigger.sophocles:hover {
+  border-color: rgba(127, 220, 232, 0.4);
+  background: rgba(127, 220, 232, 0.02);
+}
+
+.persona-selector-trigger.athena {
+  border-color: rgba(201, 160, 53, 0.15);
+  box-shadow: 0 0 12px rgba(201, 160, 53, 0.05);
+}
+
+.persona-selector-trigger.athena:hover {
+  border-color: rgba(201, 160, 53, 0.25);
+  background: rgba(201, 160, 53, 0.02);
+}
+
+.persona-selector-trigger.athena .persona-selector-chevron {
+  color: #C9A035;
+}
+
+.persona-selector-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.persona-selector-trigger.sophocles .persona-selector-active-dot {
+  background: #7FDCE8;
+  box-shadow: 0 0 6px #7FDCE8;
+}
+
+.persona-selector-trigger.athena .persona-selector-active-dot {
+  background: #C9A035;
+  box-shadow: 0 0 6px #C9A035;
+}
+
+.persona-selector-chevron {
+  color: var(--gray);
+  transition: transform 0.2s ease;
+  margin-left: 2px;
+}
+
+.persona-selector-chevron.open {
+  transform: rotate(180deg);
+}
+
+.persona-dropdown-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  background: rgba(12, 9, 5, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.persona-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--white);
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.persona-dropdown-item:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.persona-dropdown-item.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.persona-dropdown-item.active.sophocles {
+  border-left: 2px solid #7FDCE8;
+}
+
+.persona-dropdown-item.active.athena {
+  border-left: 2px solid #C9A035;
+}
+
+.persona-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.persona-item-dot.sophocles {
+  background: #7FDCE8;
+}
+
+.persona-item-dot.athena {
+  background: #C9A035;
+}
+
+.persona-item-dot.disabled {
+  background: var(--gray2);
+}
+
+.persona-item-name {
+  font-weight: 500;
+}
+
+.persona-item-desc {
+  color: var(--gray);
+  font-size: 0.68rem;
+}
+
+.persona-premium-badge {
+  margin-left: auto;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #C9A035;
+  background: rgba(201, 160, 53, 0.1);
+  border: 1px solid rgba(201, 160, 53, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.persona-dropdown-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.persona-dropdown-item.disabled:hover {
+  background: transparent;
+}
+
+/* Input Area Accent Colors */
+.input-box.sophocles-active {
+  border-color: rgba(127, 220, 232, 0.15);
+}
+
+.input-box.sophocles-active:focus-within {
+  border-color: rgba(127, 220, 232, 0.45) !important;
+  box-shadow: 0 0 10px rgba(127, 220, 232, 0.06);
+}
+
+.input-box.sophocles-active #send-btn {
+  background: #7FDCE8 !important;
+  color: var(--black);
+}
+
+.input-box.athena-active {
+  background: rgba(12, 9, 5, 0.65) !important;
+  border: 1px solid rgba(201, 160, 53, 0.15) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.input-box.athena-active:focus-within {
+  border-color: rgba(201, 160, 53, 0.22) !important;
+  box-shadow: 0 0 12px rgba(201, 160, 53, 0.08) !important;
+}
+
+.input-box.athena-active #send-btn {
+  background: linear-gradient(135deg, #C9A035, #9A6E28) !important;
+  color: #020100 !important;
+  border-radius: 50% !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   MODEL ATHENA — warm gold/cream ambient background (new palette)
+   ════════════════════════════════════════════════════════════ */
+
+.model-athena {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 25% 30%, rgba(201, 160, 53, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 75%, rgba(201, 160, 53, 0.06) 0%, transparent 50%),
+    linear-gradient(135deg, #0a0805 0%, #0d0a06 50%, #0a0805 100%) !important;
+}
+
+.model-athena #sb {
+  background: rgba(12, 9, 5, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.model-athena .msg.ai .msg-bubble {
+  background: rgba(12, 9, 5, 0.55) !important;
+  border: 1px solid rgba(201, 160, 53, 0.12) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.model-athena .msg.user .msg-bubble {
+  background: rgba(201, 160, 53, 0.08) !important;
+  border: 1px solid rgba(201, 160, 53, 0.22) !important;
+}
+
+.model-athena .msg.ai .msg-bubble strong {
+  color: #C9A035 !important;
+}
+
+/* Font family overriding when Athena active */
+.model-athena h1,
+.model-athena h2,
+.model-athena h3,
+.model-athena .tb-title,
+.model-athena .w-title {
+  font-family: var(--serif) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   UPGRADE PAGE LAYOUT OVERRIDE
+   Must be at end of file to win CSS cascade over .model-* rules
+   ════════════════════════════════════════════════════════════ */
+body.upgrade-page {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100vw !important;
+  display: block !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #0a0805 !important;
 }
