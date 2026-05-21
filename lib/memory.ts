@@ -58,7 +58,7 @@ ${existingMemories.length > 0 ? existingMemories.map(m => `- ${m}`).join('\n') :
 
 If the message contains a NEW personal fact not already in memories, respond with a single concise sentence stating that fact. Example: "User's name is Santiago." or "User lives in Tegucigalpa, Honduras."
 
-If no new personal fact, respond with exactly: NONE
+If no new personal fact, respond with ONLY the word NONE and nothing else. Do not explain. Do not add parentheses or commentary. Just: NONE
 
 Be conservative. When in doubt, return NONE.`,
       messages: [{ role: 'user', content: userMessage }],
@@ -67,7 +67,19 @@ Be conservative. When in doubt, return NONE.`,
     const textBlock = response.content.find((b: any) => b.type === 'text') as any;
     const result = textBlock?.text?.trim() || 'NONE';
     
-    if (result === 'NONE' || result.length < 10) return null;
+    // Robust NONE detection: model sometimes returns "NONE" with extra explanation
+    const normalizedResult = result.toUpperCase().trim();
+    if (
+      normalizedResult === 'NONE' ||
+      normalizedResult.startsWith('NONE') ||
+      normalizedResult.startsWith('(NONE') ||
+      result.length < 10 ||
+      result.includes('not a personal fact') ||
+      result.includes('one-off question') ||
+      result.includes('worth remembering')
+    ) {
+      return null;
+    }
     
     return result;
   } catch (err) {
