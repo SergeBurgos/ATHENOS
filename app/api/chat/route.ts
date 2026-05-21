@@ -23,11 +23,21 @@ function isValidModel(model: unknown): model is ModelTier {
 
 // Check if user has access to a specific persona tier
 // Currently a placeholder — will be replaced with real Stripe/Paddle subscription check
-async function userHasAccessToTier(userId: string | undefined, tier: ModelTier): Promise<boolean> {
+async function userHasAccessToTier(userEmail: string | undefined, tier: ModelTier): Promise<boolean> {
   // Sophocles is free for all (including anonymous)
   if (tier === 'sophocles') return true;
   
-  // All other tiers require Strategist subscription
+  // Admin/founder emails get full access to all tiers (dev + production)
+  const adminEmails = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean);
+  
+  if (userEmail && adminEmails.includes(userEmail.toLowerCase())) {
+    return true;
+  }
+  
+  // All other users: non-sophocles tiers require Strategist subscription
   // PLACEHOLDER: currently always returns false (no paid users yet)
   // TODO: when Stripe/Paddle integration lands, query user's subscription status here
   return false;
@@ -212,7 +222,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Gating: check if user has access to selected persona
-    const hasAccess = await userHasAccessToTier(user?.id, model);
+    const hasAccess = await userHasAccessToTier(user?.email, model);
     if (!hasAccess) {
       return NextResponse.json(
         { 

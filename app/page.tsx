@@ -449,6 +449,7 @@ export default function Home() {
       if (response.status === 403) {
         const errData = await response.json();
         if (errData.error === 'STRATEGIST_REQUIRED') {
+          setSelectedModel('sophocles'); // reset so UI isn't stuck on locked persona
           router.push(errData.upgradeUrl || '/upgrade');
           return;
         }
@@ -873,9 +874,10 @@ export default function Home() {
                     type="button"
                     className={`persona-dropdown-item athena ${selectedModel === 'athena' ? 'active' : ''}`}
                     onClick={() => {
-                      // ALL users go to /upgrade for now (Stripe integration pending)
-                      // TODO: when Stripe integrated, check user.subscription_tier === 'strategist' before setting state
-                      router.push('/upgrade');
+                      // Select Athena as the active model. Backend will verify access
+                      // when a message is sent — if user lacks access, the 403 handler
+                      // redirects to /upgrade. This lets admin-whitelisted users use Athena.
+                      setSelectedModel('athena');
                       setIsDropdownOpen(false);
                     }}
                   >
