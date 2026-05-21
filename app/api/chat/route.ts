@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
 import { ModelTier, buildSystemPrompt, MODEL_BY_TIER } from '@/lib/athenos';
+import { isAdminEmail } from '@/lib/billing';
 import { tools, executeTool } from '@/lib/tools';
 import { getUserMemories, formatMemoriesForPrompt, extractFact, saveMemory } from '@/lib/memory';
 
@@ -15,7 +16,7 @@ interface Message {
   content: string;
 }
 
-const AVAILABLE_MODELS: ModelTier[] = ['sophocles', 'athena'];
+const AVAILABLE_MODELS: ModelTier[] = ['sophocles', 'socrates', 'ares', 'athena'];
 
 function isValidModel(model: unknown): model is ModelTier {
   return typeof model === 'string' && ['sophocles', 'socrates', 'ares', 'athena'].includes(model);
@@ -26,20 +27,13 @@ function isValidModel(model: unknown): model is ModelTier {
 async function userHasAccessToTier(userEmail: string | undefined, tier: ModelTier): Promise<boolean> {
   // Sophocles is free for all (including anonymous)
   if (tier === 'sophocles') return true;
-  
-  // Admin/founder emails get full access to all tiers (dev + production)
-  const adminEmails = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(Boolean);
-  
-  if (userEmail && adminEmails.includes(userEmail.toLowerCase())) {
-    return true;
-  }
-  
-  // All other users: non-sophocles tiers require Strategist subscription
-  // PLACEHOLDER: currently always returns false (no paid users yet)
-  // TODO: when Stripe/Paddle integration lands, query user's subscription status here
+
+  // Admins get access to everything
+  if (isAdminEmail(userEmail)) return true;
+
+  // Athena: paid tier (Strategist) — placeholder until Stripe, currently admin-only via above
+  // Socrates/Ares: admin-only for now (not released to users yet)
+  // All non-admin users: no access to athena/socrates/ares
   return false;
 }
 

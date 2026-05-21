@@ -149,6 +149,7 @@ export default function Home() {
   const [deleting, setDeleting] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ModelTier>('sophocles');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -163,6 +164,13 @@ export default function Home() {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [messages, loading, conversationId, loadingConv]);
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then(res => res.json())
+      .then(data => setIsAdmin(data.isAdmin === true))
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -835,8 +843,8 @@ export default function Home() {
                 <span className="persona-selector-label">
                   {selectedModel === 'sophocles' && 'Sophocles — Fast'}
                   {selectedModel === 'athena' && 'Athena — Deep · Strategist'}
-                  {selectedModel === 'socrates' && 'Socrates — Coming soon'}
-                  {selectedModel === 'ares' && 'Ares — Coming soon'}
+                  {selectedModel === 'socrates' && 'Socrates — Builder'}
+                  {selectedModel === 'ares' && 'Ares — Execution'}
                 </span>
                 <svg
                   className={`persona-selector-chevron ${isDropdownOpen ? 'open' : ''}`}
@@ -888,24 +896,54 @@ export default function Home() {
                   </button>
 
                   {/* Socrates */}
-                  <div
-                    className="persona-dropdown-item disabled"
-                    title="Coming soon"
-                  >
-                    <span className="persona-item-dot disabled"></span>
-                    <span className="persona-item-name">Socrates</span>
-                    <span className="persona-item-desc">— Coming soon</span>
-                  </div>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className={`persona-dropdown-item socrates ${selectedModel === 'socrates' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedModel('socrates');
+                        setIsDropdownOpen(false);
+                      }}
+                    >
+                      <span className="persona-item-dot socrates"></span>
+                      <span className="persona-item-name">Socrates</span>
+                      <span className="persona-item-desc">— Builder</span>
+                    </button>
+                  ) : (
+                    <div
+                      className="persona-dropdown-item disabled"
+                      title="Coming soon"
+                    >
+                      <span className="persona-item-dot disabled"></span>
+                      <span className="persona-item-name">Socrates</span>
+                      <span className="persona-item-desc">— Coming soon</span>
+                    </div>
+                  )}
 
                   {/* Ares */}
-                  <div
-                    className="persona-dropdown-item disabled"
-                    title="Coming soon"
-                  >
-                    <span className="persona-item-dot disabled"></span>
-                    <span className="persona-item-name">Ares</span>
-                    <span className="persona-item-desc">— Coming soon</span>
-                  </div>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className={`persona-dropdown-item ares ${selectedModel === 'ares' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedModel('ares');
+                        setIsDropdownOpen(false);
+                      }}
+                    >
+                      <span className="persona-item-dot ares"></span>
+                      <span className="persona-item-name">Ares</span>
+                      <span className="persona-item-desc">— Execution</span>
+                    </button>
+                  ) : (
+                    <div
+                      className="persona-dropdown-item disabled"
+                      title="Coming soon"
+                    >
+                      <span className="persona-item-dot disabled"></span>
+                      <span className="persona-item-name">Ares</span>
+                      <span className="persona-item-desc">— Coming soon</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
