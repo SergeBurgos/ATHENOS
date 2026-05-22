@@ -730,6 +730,28 @@ export default function Home() {
 
       {/* MAIN */}
       <div id="main">
+        {/* ATHENA ANIMATED BACKGROUND — only mounts when Athena persona is active */}
+        {selectedModel === 'athena' && (
+          <div className="athena-bg-layer" aria-hidden="true">
+            <div className="ath-orb ath-o1"></div>
+            <div className="ath-orb ath-o2"></div>
+            <div className="ath-orb ath-o3"></div>
+            <div className="ath-shimmer"></div>
+            <div className="ath-ring ath-r1"></div>
+            <div className="ath-ring ath-r2"></div>
+            <div className="ath-ring ath-r3"></div>
+            <div className="ath-center-pulse"></div>
+            <div className="ath-dust ath-d1"></div>
+            <div className="ath-dust ath-d2"></div>
+            <div className="ath-dust ath-d3"></div>
+            <div className="ath-dust ath-d4"></div>
+            <div className="ath-dust ath-d5"></div>
+            <div className="ath-dust ath-d6"></div>
+            <div className="ath-dust ath-d7"></div>
+            <div className="ath-dust ath-d8"></div>
+          </div>
+        )}
+
         <div id="topbar">
           <div className="tb-left">
             <div className="tb-title">

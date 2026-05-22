@@ -2082,3 +2082,127 @@ body.upgrade-page {
   overflow-x: hidden !important;
   background: #0a0805 !important;
 }
+
+/* ════════════════════════════════════════════════════════════
+   ATHENA ANIMATED BACKGROUND — gold ambient effects
+   GPU-only (transform/opacity), mobile-reduced, motion-safe
+   ════════════════════════════════════════════════════════════ */
+.athena-bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.athena-bg-layer > * {
+  pointer-events: none;
+}
+
+/* Orbs */
+.ath-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,160,53,.14) 0%, rgba(201,160,53,.04) 40%, transparent 70%);
+  filter: blur(40px);
+  will-change: transform;
+  animation: athDrift linear infinite;
+}
+.ath-o1 { width: 300px; height: 300px; left: 10%; animation-duration: 60s; }
+.ath-o2 { width: 400px; height: 400px; left: 55%; animation-duration: 75s; animation-delay: -25s; }
+.ath-o3 { width: 250px; height: 250px; left: 80%; animation-duration: 55s; animation-delay: -15s; }
+@keyframes athDrift {
+  0%   { transform: translateY(110vh) translateX(0);   opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(-30vh) translateX(60px); opacity: 0; }
+}
+
+/* Shimmer */
+.ath-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 35%, rgba(201,160,53,.05) 50%, transparent 65%);
+  animation: athShimmer 18s ease-in-out infinite;
+}
+@keyframes athShimmer {
+  0%, 100% { opacity: 0; transform: translateX(-30%); }
+  50%       { opacity: 1; transform: translateX(30%);  }
+}
+
+/* Rings */
+.ath-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid rgba(201,160,53,.05);
+  border-radius: 50%;
+  will-change: transform;
+}
+.ath-r1 { width: 80vw; height: 80vw; animation: athRotate 90s  linear infinite; }
+.ath-r2 { width: 60vw; height: 60vw; animation: athRotate 70s  linear infinite reverse; border-color: rgba(201,160,53,.06); }
+.ath-r3 { width: 40vw; height: 40vw; animation: athRotate 110s linear infinite; }
+@keyframes athRotate {
+  from { transform: translate(-50%,-50%) rotate(0deg); }
+  to   { transform: translate(-50%,-50%) rotate(360deg); }
+}
+
+/* Center pulse */
+.ath-center-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30vw;
+  height: 30vw;
+  background: radial-gradient(circle, rgba(201,160,53,.08) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: athBreathe 9s ease-in-out infinite;
+}
+@keyframes athBreathe {
+  0%, 100% { opacity: .4; transform: translate(-50%,-50%) scale(1);   }
+  50%       { opacity: .9; transform: translate(-50%,-50%) scale(1.2); }
+}
+
+/* Dust */
+.ath-dust {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: rgba(201,160,53,.7);
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(201,160,53,.4);
+  animation: athDustFloat linear infinite;
+}
+.ath-d1 { left:  8%; animation-duration: 25s; }
+.ath-d2 { left: 22%; animation-duration: 30s; animation-delay:  -8s; }
+.ath-d3 { left: 38%; animation-duration: 28s; animation-delay: -15s; }
+.ath-d4 { left: 55%; animation-duration: 32s; animation-delay:  -5s; }
+.ath-d5 { left: 72%; animation-duration: 26s; animation-delay: -18s; }
+.ath-d6 { left: 88%; animation-duration: 29s; animation-delay: -22s; }
+.ath-d7 { left: 48%; animation-duration: 35s; animation-delay: -12s; }
+.ath-d8 { left: 65%; animation-duration: 27s; animation-delay: -25s; }
+@keyframes athDustFloat {
+  0%   { transform: translateY(110vh) translateX(0);  opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-10vh) translateX(20px); opacity: 0; }
+}
+
+/* MOBILE: reduce particle count and heavy effects */
+@media (max-width: 768px) {
+  .ath-d4, .ath-d5, .ath-d6, .ath-d7, .ath-d8 { display: none; }
+  .ath-r2  { display: none; }
+  .ath-o3  { display: none; }
+}
+
+/* MOTION SAFETY: disable all animation for users who request reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ath-orb,
+  .ath-shimmer,
+  .ath-ring,
+  .ath-center-pulse,
+  .ath-dust {
+    animation: none !important;
+  }
+  .ath-shimmer,
+  .ath-dust { opacity: 0 !important; }
+}
