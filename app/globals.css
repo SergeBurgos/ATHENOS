@@ -2206,3 +2206,93 @@ body.upgrade-page {
   .ath-shimmer,
   .ath-dust { opacity: 0 !important; }
 }
+/* ─── File attachment UI ─────────────────────────────────── */
+.attach-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  padding: 4px 8px;
+}
+.attach-btn:hover { opacity: 1; }
+.attach-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.attached-files-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.attached-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(201, 160, 53, 0.08);
+  border: 1px solid rgba(201, 160, 53, 0.2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  max-width: 200px;
+}
+.file-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.file-pdf-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(201, 160, 53, 0.15);
+  border-radius: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #C9A035;
+}
+.file-chip-name {
+  font-size: 0.75rem;
+  color: #f5f0e7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.file-remove-btn {
+  background: transparent;
+  border: none;
+  color: rgba(245, 240, 231, 0.6);
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+}
+.file-remove-btn:hover { color: #f5f0e7; }
+
+.athenos-toast {
+  position: fixed;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-55%);
+  background: rgba(20, 15, 8, 0.95);
+  border: 1px solid rgba(201, 160, 53, 0.35);
+  color: #f5f0e7;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  z-index: 9999;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  max-width: 90vw;
+  text-align: center;
+  animation: toastIn 0.25s ease;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-55%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-55%) translateY(0); }
+}

@@ -13,7 +13,7 @@ const client = new Anthropic({
 
 interface Message {
   role: 'user' | 'assistant';
-  content: string;
+  content: string | any[];
 }
 
 const AVAILABLE_MODELS: ModelTier[] = ['sophocles', 'socrates', 'ares', 'athena'];
@@ -186,13 +186,37 @@ function generateTitle(message: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { message, history = [], conversationId: incomingConvId, model: requestedModel } = body;
+    const { message, history = [], conversationId: incomingConvId, model: requestedModel, files } = body;
 
-    if (!message || typeof message !== 'string') {
-      return NextResponse.json(
-        { error: 'Message is required and must be a string' },
-        { status: 400 }
-      );
+    const hasFiles = files && Array.isArray(files) && files.length > 0;
+
+    if (!hasFiles) {
+      if (!message || typeof message !== 'string') {
+        return NextResponse.json(
+          { error: 'Message is required and must be a string' },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (message && typeof message !== 'string') {
+        return NextResponse.json(
+          { error: 'Message must be a string' },
+          { status: 400 }
+        );
+      }
+      if (files.length > 4) {
+        return NextResponse.json({ error: 'TOO_MANY_FILES', message: 'Maximum 4 files per message.' }, { status: 400 });
+      }
+      for (const file of files) {
+        const decodedSize = (file.data.length * 3) / 4;
+        if (decodedSize > 5 * 1024 * 1024) {
+          return NextResponse.json({ error: 'FILE_TOO_LARGE', message: 'Each file must be under 5 MB.' }, { status: 400 });
+        }
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+          return NextResponse.json({ error: 'UNSUPPORTED_FILE_TYPE', message: 'Only JPG, PNG, WEBP images and PDF files are supported.' }, { status: 400 });
+        }
+      }
     }
 
     const model: ModelTier = isValidModel(requestedModel) ? requestedModel : 'sophocles';
@@ -213,6 +237,16 @@ export async function POST(req: NextRequest) {
         { error: 'Unauthorized. Please sign in.' },
         { status: 401 }
       );
+    }
+
+    if (hasFiles) {
+      const hasPdf = files.some((f: any) => f.type === 'application/pdf');
+      if (hasPdf && !isAdminEmail(user?.email)) {
+        return NextResponse.json(
+          { error: 'PDF_REQUIRES_UPGRADE', message: 'PDF analysis is available on a paid plan. Images are available to everyone.', upgradeUrl: '/upgrade' },
+          { status: 403 }
+        );
+      }
     }
 
     // Gating: check if user has access to selected persona
@@ -250,7 +284,7 @@ export async function POST(req: NextRequest) {
         .from('conversations')
         .insert({
           user_id: user.id,
-          title: generateTitle(message),
+          title: generateTitle(message || 'Attached file(s)'),
         })
         .select('id')
         .single();
@@ -266,13 +300,50 @@ export async function POST(req: NextRequest) {
       conversationId = newConv.id;
     }
 
+    let userContent: any;
+    let savedUserContent = message;
+
+    if (hasFiles) {
+      const contentBlocks: any[] = [];
+      for (const file of files) {
+        if (file.type === 'application/pdf') {
+          contentBlocks.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: file.data,
+            },
+          });
+        } else {
+          contentBlocks.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: file.type,
+              data: file.data,
+            },
+          });
+        }
+      }
+      if (message && message.trim()) {
+        contentBlocks.push({ type: 'text', text: message });
+      } else {
+        contentBlocks.push({ type: 'text', text: 'Please analyze the attached file(s).' });
+      }
+      userContent = contentBlocks;
+      savedUserContent = `${message || ''}\n\n[Usuario adjuntó ${files.length} archivo(s): ${files.map((f: any) => f.name).join(', ')}]`.trim();
+    } else {
+      userContent = message;
+    }
+
     // Save user message
     const { error: userMsgError } = await supabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
         role: 'user',
-        content: message,
+        content: savedUserContent,
       });
 
     if (userMsgError) {
@@ -283,7 +354,7 @@ export async function POST(req: NextRequest) {
     // Build conversation history for Claude
     const messages: Message[] = [
       ...history,
-      { role: 'user', content: message },
+      { role: 'user', content: userContent },
     ];
 
     const { reply: replyText, provider } = await callAIProvider(messages, enhancedSystemPrompt, model);
@@ -310,19 +381,33 @@ export async function POST(req: NextRequest) {
     // Fire-and-forget: extract and save memory in background
     // Don't await — user gets response immediately
     if (user && messages.length > 0) {
-      const lastUserMessage = messages[messages.length - 1].content;
+      let lastUserText: string;
+      const rawLastContent = messages[messages.length - 1].content;
+      if (typeof rawLastContent === 'string') {
+        lastUserText = rawLastContent;
+      } else if (Array.isArray(rawLastContent)) {
+        lastUserText = rawLastContent
+          .filter((block: any) => block.type === 'text')
+          .map((block: any) => block.text)
+          .join(' ')
+          .trim();
+      } else {
+        lastUserText = '';
+      }
       
-      // Run in background (don't block response)
-      (async () => {
-        try {
-          const fact = await extractFact(client, lastUserMessage, memories);
-          if (fact) {
-            await saveMemory(supabase, user.id, fact);
+      if (lastUserText) {
+        // Run in background (don't block response)
+        (async () => {
+          try {
+            const fact = await extractFact(client, lastUserText, memories);
+            if (fact) {
+              await saveMemory(supabase, user.id, fact);
+            }
+          } catch (err) {
+            console.error('Background memory task failed:', err);
           }
-        } catch (err) {
-          console.error('Background memory task failed:', err);
-        }
-      })();
+        })();
+      }
     }
 
     return NextResponse.json({
