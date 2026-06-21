@@ -64,6 +64,86 @@ async function callAnthropicWithRetry(client: Anthropic, params: any, maxRetries
   throw lastError;
 }
 
+function shouldStream(model: ModelTier): boolean {
+  return model !== 'sophocles';
+}
+
+async function callAnthropicStreamWithRetry(client: Anthropic, params: any, maxRetries = 2) {
+  let lastError: any = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log('[Provider:anthropic] Streaming...');
+      const stream = client.messages.stream(params);
+      
+      // Accumulate content blocks as they stream
+      const contentBlocks: any[] = [];
+      let stopReason: string | null = null;
+      let usage: any = null;
+      let model: string | null = null;
+      let id: string | null = null;
+      let role: string = 'assistant';
+      
+      for await (const event of stream) {
+        if (event.type === 'message_start') {
+          id = event.message.id;
+          model = event.message.model;
+          usage = event.message.usage;
+        } else if (event.type === 'content_block_start') {
+          // Initialize a new block at this index
+          contentBlocks[event.index] = { ...event.content_block };
+          // For text/thinking blocks, prepare a string accumulator
+          if (event.content_block.type === 'text') {
+            contentBlocks[event.index].text = '';
+          }
+        } else if (event.type === 'content_block_delta') {
+          const block = contentBlocks[event.index];
+          if (!block) continue;
+          if (event.delta.type === 'text_delta') {
+            block.text = (block.text || '') + event.delta.text;
+          } else if (event.delta.type === 'input_json_delta') {
+            // For tool_use, the input is built from JSON deltas
+            block.partial_json = (block.partial_json || '') + event.delta.partial_json;
+          }
+        } else if (event.type === 'content_block_stop') {
+          const block = contentBlocks[event.index];
+          // Parse accumulated JSON for tool_use blocks
+          if (block && block.type === 'tool_use' && block.partial_json !== undefined) {
+            try {
+              block.input = JSON.parse(block.partial_json);
+            } catch {
+              block.input = {};
+            }
+            delete block.partial_json;
+          }
+        } else if (event.type === 'message_delta') {
+          if (event.delta.stop_reason) stopReason = event.delta.stop_reason;
+          if (event.usage) usage = { ...usage, ...event.usage };
+        } else if (event.type === 'message_stop') {
+          // Done
+        }
+      }
+      
+      // Return a synthetic response matching messages.create() shape
+      return {
+        id,
+        model,
+        role,
+        content: contentBlocks.filter(b => b !== undefined),
+        stop_reason: stopReason,
+        usage,
+      } as any;
+      
+    } catch (err: any) {
+      lastError = err;
+      if (err.status !== 529 || attempt === maxRetries) throw err;
+      const delayMs = Math.pow(2, attempt) * 1000;
+      console.log(`[Provider:anthropic streaming] 529 Overloaded, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 async function callAIProvider(
   messages: Message[],
   enhancedSystemPrompt: string,
@@ -80,13 +160,21 @@ async function callAIProvider(
     while (iterations < MAX_ITERATIONS) {
       iterations++;
 
-      const response = await callAnthropicWithRetry(client, {
-        model: MODEL_BY_TIER[model],
-        max_tokens: 1024,
-        system: enhancedSystemPrompt,
-        tools: tools,
-        messages: currentMessages,
-      });
+      const response = shouldStream(model)
+        ? await callAnthropicStreamWithRetry(client, {
+            model: MODEL_BY_TIER[model],
+            max_tokens: 1024,
+            system: enhancedSystemPrompt,
+            tools: tools,
+            messages: currentMessages,
+          })
+        : await callAnthropicWithRetry(client, {
+            model: MODEL_BY_TIER[model],
+            max_tokens: 1024,
+            system: enhancedSystemPrompt,
+            tools: tools,
+            messages: currentMessages,
+          });
 
       if (response.stop_reason === 'tool_use') {
         const toolUseBlock = response.content.find((block: any) => block.type === 'tool_use') as any;
@@ -128,12 +216,19 @@ async function callAIProvider(
     }
 
     if (!replyText || replyText.trim().length === 0) {
-      const finalResponse = await callAnthropicWithRetry(client, {
-        model: MODEL_BY_TIER[model],
-        max_tokens: 1024,
-        system: enhancedSystemPrompt,
-        messages: currentMessages,
-      });
+      const finalResponse = shouldStream(model)
+        ? await callAnthropicStreamWithRetry(client, {
+            model: MODEL_BY_TIER[model],
+            max_tokens: 1024,
+            system: enhancedSystemPrompt,
+            messages: currentMessages,
+          })
+        : await callAnthropicWithRetry(client, {
+            model: MODEL_BY_TIER[model],
+            max_tokens: 1024,
+            system: enhancedSystemPrompt,
+            messages: currentMessages,
+          });
       const textBlocks = finalResponse.content.filter((block: any) => block.type === 'text');
       replyText = textBlocks.map((block: any) => block.text).join('') || 'No pude completar la búsqueda. ¿Podés reformular tu pregunta?';
     }
