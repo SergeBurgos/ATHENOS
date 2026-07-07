@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import OpenAI from 'openai';
-import { ModelTier, buildSystemPrompt, MODEL_BY_TIER } from '@/lib/athenos';
+import { ModelTier, buildSystemPrompt, MAX_TOKENS_BY_TIER, MODEL_BY_TIER } from '@/lib/athenos';
 import { isAdminEmail } from '@/lib/billing';
 import { tools, executeTool } from '@/lib/tools';
 import { getUserMemories, formatMemoriesForPrompt, extractFact, saveMemory } from '@/lib/memory';
@@ -163,14 +163,14 @@ async function callAIProvider(
       const response = shouldStream(model)
         ? await callAnthropicStreamWithRetry(client, {
             model: MODEL_BY_TIER[model],
-            max_tokens: 1024,
+            max_tokens: MAX_TOKENS_BY_TIER[model],
             system: enhancedSystemPrompt,
             tools: tools,
             messages: currentMessages,
           })
         : await callAnthropicWithRetry(client, {
             model: MODEL_BY_TIER[model],
-            max_tokens: 1024,
+            max_tokens: MAX_TOKENS_BY_TIER[model],
             system: enhancedSystemPrompt,
             tools: tools,
             messages: currentMessages,
@@ -219,13 +219,13 @@ async function callAIProvider(
       const finalResponse = shouldStream(model)
         ? await callAnthropicStreamWithRetry(client, {
             model: MODEL_BY_TIER[model],
-            max_tokens: 1024,
+            max_tokens: MAX_TOKENS_BY_TIER[model],
             system: enhancedSystemPrompt,
             messages: currentMessages,
           })
         : await callAnthropicWithRetry(client, {
             model: MODEL_BY_TIER[model],
-            max_tokens: 1024,
+            max_tokens: MAX_TOKENS_BY_TIER[model],
             system: enhancedSystemPrompt,
             messages: currentMessages,
           });

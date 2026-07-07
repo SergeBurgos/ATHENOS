@@ -225,6 +225,13 @@ export const MODEL_BY_TIER: Record<ModelTier, string> = {
   athena: 'claude-opus-4-5-20251101',
 };
 
+export const MAX_TOKENS_BY_TIER: Record<ModelTier, number> = {
+  sophocles: 1024,
+  socrates: 2048,
+  ares: 2048,
+  athena: 4096,
+};
+
 export function buildVoiceSystemPrompt(): string {
   return `VOICE MODE — ATHENOS SPEAKING
 
