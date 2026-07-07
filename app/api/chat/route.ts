@@ -278,6 +278,187 @@ function generateTitle(message: string): string {
   return cleaned.slice(0, 47) + '...';
 }
 
+async function streamAnthropicCall(
+  client: Anthropic,
+  params: any,
+  onText: (text: string) => void,
+  maxRetries = 2
+) {
+  let lastError: any = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const stream = client.messages.stream(params);
+      const contentBlocks: any[] = [];
+      let stopReason: string | null = null;
+      let usage: any = null;
+      let model: string | null = null;
+      let id: string | null = null;
+
+      for await (const event of stream) {
+        if (event.type === 'message_start') {
+          id = event.message.id;
+          model = event.message.model;
+          usage = event.message.usage;
+        } else if (event.type === 'content_block_start') {
+          contentBlocks[event.index] = { ...event.content_block };
+          if (event.content_block.type === 'text') {
+            contentBlocks[event.index].text = '';
+          }
+        } else if (event.type === 'content_block_delta') {
+          const block = contentBlocks[event.index];
+          if (!block) continue;
+          if (event.delta.type === 'text_delta') {
+            block.text = (block.text || '') + event.delta.text;
+            onText(event.delta.text);
+          } else if (event.delta.type === 'input_json_delta') {
+            block.partial_json = (block.partial_json || '') + event.delta.partial_json;
+          }
+        } else if (event.type === 'content_block_stop') {
+          const block = contentBlocks[event.index];
+          if (block && block.type === 'tool_use' && block.partial_json !== undefined) {
+            try {
+              block.input = JSON.parse(block.partial_json);
+            } catch {
+              block.input = {};
+            }
+            delete block.partial_json;
+          }
+        } else if (event.type === 'message_delta') {
+          if (event.delta.stop_reason) stopReason = event.delta.stop_reason;
+          if (event.usage) usage = { ...usage, ...event.usage };
+        }
+      }
+
+      return {
+        id,
+        model,
+        role: 'assistant',
+        content: contentBlocks.filter(b => b !== undefined),
+        stop_reason: stopReason,
+        usage,
+      } as any;
+    } catch (err: any) {
+      lastError = err;
+      if (err.status !== 529 || attempt === maxRetries) throw err;
+      const delayMs = Math.pow(2, attempt) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
+function createStreamingResponse(opts: {
+  client: Anthropic;
+  model: ModelTier;
+  enhancedSystemPrompt: string;
+  initialMessages: Message[];
+  supabase: any;
+  conversationId: string;
+  userId: string;
+  memories: string[];
+}): Response {
+  const { client, model, enhancedSystemPrompt, initialMessages, supabase, conversationId, userId, memories } = opts;
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj: any) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+      };
+
+      let fullText = '';
+      try {
+        send({ type: 'meta', conversationId });
+
+        const onText = (text: string) => {
+          fullText += text;
+          send({ type: 'delta', text });
+        };
+
+        let currentMessages: any[] = [...initialMessages];
+        let iterations = 0;
+        const MAX_ITERATIONS = 6;
+
+        while (iterations < MAX_ITERATIONS) {
+          iterations++;
+          const response = await streamAnthropicCall(client, {
+            model: MODEL_BY_TIER[model],
+            max_tokens: MAX_TOKENS_BY_TIER[model],
+            system: enhancedSystemPrompt,
+            tools: tools,
+            messages: currentMessages,
+          }, onText);
+
+          if (response.stop_reason === 'tool_use') {
+            const toolUseBlock = response.content.find((b: any) => b.type === 'tool_use') as any;
+            if (!toolUseBlock) break;
+
+            if (toolUseBlock.name === 'web_search') {
+              currentMessages.push({ role: 'assistant', content: response.content });
+              continue;
+            }
+
+            const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input);
+            currentMessages.push({ role: 'assistant', content: response.content });
+            currentMessages.push({
+              role: 'user',
+              content: [{ type: 'tool_result', tool_use_id: toolUseBlock.id, content: toolResult }],
+            });
+          } else {
+            break;
+          }
+        }
+
+        send({ type: 'done' });
+
+        if (fullText.trim().length > 0) {
+          const { error: aiMsgError } = await supabase
+            .from('messages')
+            .insert({ conversation_id: conversationId, role: 'assistant', content: fullText });
+          if (aiMsgError) console.error('Failed to save AI message:', aiMsgError);
+
+          await supabase
+            .from('conversations')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', conversationId);
+
+          try {
+            const lastUserMsg = initialMessages[initialMessages.length - 1];
+            let lastUserText = '';
+            const raw: any = lastUserMsg?.content;
+            if (typeof raw === 'string') {
+              lastUserText = raw;
+            } else if (Array.isArray(raw)) {
+              lastUserText = raw.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ').trim();
+            }
+            if (lastUserText) {
+              const fact = await extractFact(client, lastUserText, memories);
+              if (fact) await saveMemory(supabase, userId, fact);
+            }
+          } catch (err) {
+            console.error('Background memory task failed:', err);
+          }
+        }
+
+        controller.close();
+      } catch (err: any) {
+        console.error('[streaming] error:', err?.message || err);
+        try {
+          send({ type: 'error', message: 'Ocurrió un error generando la respuesta. Intentá de nuevo.' });
+        } catch {}
+        try { controller.close(); } catch {}
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -451,6 +632,20 @@ export async function POST(req: NextRequest) {
       ...history,
       { role: 'user', content: userContent },
     ];
+
+    // Streaming path for streaming-enabled personas (socrates/ares/athena)
+    if (shouldStream(model)) {
+      return createStreamingResponse({
+        client,
+        model,
+        enhancedSystemPrompt,
+        initialMessages: messages,
+        supabase,
+        conversationId,
+        userId: user.id,
+        memories,
+      });
+    }
 
     const { reply: replyText, provider } = await callAIProvider(messages, enhancedSystemPrompt, model);
 

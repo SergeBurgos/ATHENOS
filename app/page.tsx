@@ -547,19 +547,82 @@ export default function Home() {
         throw new Error(`API responded with ${response.status}`);
       }
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const isStream = contentType.includes('ndjson') || contentType.includes('event-stream');
 
-      if (data.conversationId && !conversationId) {
-        setConversationId(data.conversationId);
+      if (!isStream) {
+        // JSON path (Sophocles) — comportamiento original
+        const data = await response.json();
+        if (data.conversationId && !conversationId) {
+          setConversationId(data.conversationId);
+        }
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.reply || 'No response received.',
+        };
+        setMessages([...updatedMessages, assistantMessage]);
+        loadConversations();
+      } else {
+        // Streaming path (NDJSON) — socrates/ares/athena
+        if (!response.body) throw new Error('No response body for stream');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let streamedText = '';
+        let streamError: string | null = null;
+
+        // Add an empty assistant message that we fill as deltas arrive
+        setMessages([...updatedMessages, { role: 'assistant', content: '' }]);
+
+        const applyText = (full: string) => {
+          setMessages(prev => {
+            const copy = [...prev];
+            copy[copy.length - 1] = { role: 'assistant', content: full };
+            return copy;
+          });
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let newlineIndex;
+          while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+            const line = buffer.slice(0, newlineIndex).trim();
+            buffer = buffer.slice(newlineIndex + 1);
+            if (!line) continue;
+
+            let evt: any;
+            try {
+              evt = JSON.parse(line);
+            } catch {
+              continue;
+            }
+
+            if (evt.type === 'meta') {
+              if (evt.conversationId && !conversationId) {
+                setConversationId(evt.conversationId);
+              }
+            } else if (evt.type === 'delta') {
+              streamedText += evt.text || '';
+              applyText(streamedText);
+            } else if (evt.type === 'done') {
+              // generation finished; DB save happens server-side after this
+            } else if (evt.type === 'error') {
+              streamError = evt.message || 'Error generando la respuesta.';
+            }
+          }
+        }
+
+        if (streamError) {
+          applyText('⚠ ' + streamError);
+        } else if (!streamedText.trim()) {
+          applyText('No response received.');
+        }
+
+        loadConversations();
       }
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: data.reply || 'No response received.',
-      };
-      setMessages([...updatedMessages, assistantMessage]);
-
-      loadConversations();
     } catch (error) {
       console.error('Chat error:', error);
       // Restore the user's message in the input so they can retry
