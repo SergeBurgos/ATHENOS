@@ -14,13 +14,16 @@
     "@ricky0123/vad-web": "^0.0.30",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.3",
+    "katex": "^0.17.0",
     "next": "16.2.4",
     "onnxruntime-web": "^1.26.0",
     "openai": "^6.35.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

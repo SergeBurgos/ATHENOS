@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import Link from 'next/link';
 
 interface Message {
@@ -907,7 +910,8 @@ export default function Home() {
                   <div className="msg-bubble">
                     {msg.role === 'assistant' ? (
                       <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
                         components={{
                           code: CodeBlock,
                           pre: ({ children }) => <>{children}</>,
