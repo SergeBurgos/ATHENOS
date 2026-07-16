@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedClient } from '@/lib/auth';
 import OpenAI from 'openai';
 import { ModelTier, buildSystemPrompt, MAX_TOKENS_BY_TIER, MODEL_BY_TIER } from '@/lib/athenos';
 import { isAdminEmail } from '@/lib/billing';
@@ -504,9 +504,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get authenticated user from session
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Get authenticated user from session (Bearer token or cookies)
+    const { supabase, user, error: authError } = await getAuthenticatedClient(req);
 
     if (authError || !user) {
       return NextResponse.json(

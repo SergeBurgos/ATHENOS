@@ -25,3 +25,21 @@ export async function createClient() {
     },
   })
 }
+
+export function createClientFromToken(token: string) {
+  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    cookies: {
+      getAll() {
+        return []
+      },
+      setAll() {
+        // no-op: token-based auth doesn't use cookies
+      },
+    },
+  })
+}

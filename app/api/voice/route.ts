@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedClient } from '@/lib/auth';
 import OpenAI from 'openai';
 import { ModelTier, buildSystemPrompt, MODEL_BY_TIER } from '@/lib/athenos';
 import { readFile } from 'fs/promises';
@@ -201,8 +201,7 @@ export async function POST(req: NextRequest) {
     const sttData = await sttResponse.json();
     const transcript = (sttData.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
 
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { supabase, user } = await getAuthenticatedClient(req);
 
     let memories: string[] = [];
     if (user) {
