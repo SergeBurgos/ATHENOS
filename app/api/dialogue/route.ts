@@ -17,6 +17,8 @@ const PERSONA_NAMES: Record<ModelTier, string> = {
   athena: 'Athena',
 };
 
+const LANGUAGE_INSTRUCTION = `LANGUAGE — CRITICAL: The user wrote their topic in a specific language. You MUST conduct this entire exchange in the SAME language as the user's topic. Detect the language from the topic itself: if the topic is in Spanish, respond in Spanish; if German, in German; if French, in French; and so on for any language. Even though you are speaking to another mind of Athenos (not directly to the user), the full debate must be in the user's language. Never default to English. Never switch languages mid-dialogue. This rule takes absolute priority over all other instructions.`;
+
 function isValidModel(m: unknown): m is ModelTier {
   return typeof m === 'string' && VALID_MODELS.includes(m as ModelTier);
 }
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
 
       const instruction = `${nombreA} y ${nombreB} — dos de las mentes de Athenos — acaban de dialogar sobre el tema del usuario. Escribe la síntesis que AMBAS respaldan: 1-2 frases, primera persona plural, texto plano, sin prefijos de nombre, genuinamente extraída de lo dicho.`;
 
-      const systemPrompt = `${ATHENOS_BASE_PROMPT}\n\n${instruction}`;
+      const systemPrompt = `${ATHENOS_BASE_PROMPT}\n\n${instruction}\n\n${LANGUAGE_INSTRUCTION}`;
 
       let userContent = '';
       if (truncatedHistory) userContent += `${truncatedHistory}\n\n`;
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
 
     const turnInstruction = `Estás en un diálogo hablado corto y agudo con ${otherName} — otra mente de Athenos — sobre el tema del usuario. Responde directo al último punto, en tu propia voz. 1-3 frases, texto plano, sin prefijos de nombre, sin listas. Discrepa cuando genuinamente lo veas distinto; concede cuando la otra tenga razón. Mantenlo útil para quien escucha.`;
 
-    const systemPrompt = `${ATHENOS_BASE_PROMPT}\n\n${TIER_PROMPTS[speakerId]}\n\n${turnInstruction}`;
+    const systemPrompt = `${ATHENOS_BASE_PROMPT}\n\n${TIER_PROMPTS[speakerId]}\n\n${turnInstruction}\n\n${LANGUAGE_INSTRUCTION}`;
 
     let opening = '';
     if (truncatedHistory) opening += `${truncatedHistory}\n\n`;
