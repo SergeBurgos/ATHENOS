@@ -34,6 +34,7 @@ Rules:
   - "Ares" — execution, action, building, implementation
   - "Sophocles" — writing, communication, drafting, presentation
 - Steps must be in logical execution order.
+- Language: All user-facing text (title and note) must be in the same language as the user's goal. The JSON structure and mind names ("Athena", "Socrates", "Ares", "Sophocles") remain in English.
 - Output ONLY the JSON object. No fence, no text before or after.`;
 
 const MODEL = MODEL_BY_TIER['athena'];
