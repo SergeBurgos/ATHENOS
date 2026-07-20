@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getAuthenticatedClient } from '@/lib/auth';
 import { ATHENOS_BASE_PROMPT, TIER_PROMPTS, MODEL_BY_TIER } from '@/lib/athenos';
 import type { ModelTier } from '@/lib/athenos';
+import { tools, executeTool } from '@/lib/tools';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -38,11 +39,74 @@ function createDialogueStream(params: any): Response {
       };
 
       try {
-        const streamResult = client.messages.stream(params);
+        let currentMessages = params.messages;
+        let iterations = 0;
+        const MAX_ITERATIONS = 6;
 
-        for await (const event of streamResult) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            send({ type: 'delta', text: event.delta.text });
+        while (iterations < MAX_ITERATIONS) {
+          iterations++;
+
+          const streamResult = client.messages.stream({
+            ...params,
+            messages: currentMessages,
+          });
+
+          const contentBlocks: any[] = [];
+          let stopReason: string | null = null;
+
+          for await (const event of streamResult) {
+            if (event.type === 'content_block_start') {
+              contentBlocks[event.index] = { ...event.content_block };
+              if (event.content_block.type === 'text') {
+                contentBlocks[event.index].text = '';
+              }
+            } else if (event.type === 'content_block_delta') {
+              const block = contentBlocks[event.index];
+              if (!block) continue;
+              if (event.delta.type === 'text_delta') {
+                block.text = (block.text || '') + event.delta.text;
+                send({ type: 'delta', text: event.delta.text });
+              } else if (event.delta.type === 'input_json_delta') {
+                block.partial_json = (block.partial_json || '') + event.delta.partial_json;
+              }
+            } else if (event.type === 'content_block_stop') {
+              const block = contentBlocks[event.index];
+              if (block && block.type === 'tool_use' && block.partial_json !== undefined) {
+                try {
+                  block.input = JSON.parse(block.partial_json);
+                } catch {
+                  block.input = {};
+                }
+                delete block.partial_json;
+              }
+            } else if (event.type === 'message_delta') {
+              if (event.delta.stop_reason) stopReason = event.delta.stop_reason;
+            }
+          }
+
+          if (stopReason === 'tool_use') {
+            const toolUseBlock = contentBlocks.find((b: any) => b.type === 'tool_use');
+            if (!toolUseBlock) break;
+
+            if (toolUseBlock.name === 'web_search') {
+              currentMessages = [
+                ...currentMessages,
+                { role: 'assistant', content: contentBlocks.filter(b => b !== undefined) },
+              ];
+              continue;
+            }
+
+            const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input);
+            currentMessages = [
+              ...currentMessages,
+              { role: 'assistant', content: contentBlocks.filter(b => b !== undefined) },
+              {
+                role: 'user',
+                content: [{ type: 'tool_result', tool_use_id: toolUseBlock.id, content: toolResult }],
+              },
+            ];
+          } else {
+            break;
           }
         }
 
@@ -118,6 +182,7 @@ export async function POST(req: NextRequest) {
         model: MODEL_BY_TIER['athena'],
         max_tokens: 500,
         system: systemPrompt,
+        tools: tools,
         messages: [{ role: 'user', content: userContent }],
       });
     }
@@ -154,6 +219,7 @@ export async function POST(req: NextRequest) {
       model: MODEL_BY_TIER[speakerId],
       max_tokens: 500,
       system: systemPrompt,
+      tools: tools,
       messages,
     });
 
