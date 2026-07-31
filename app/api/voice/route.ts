@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     // 1. STT: Deepgram Nova-3
     const audioBuffer = await audioBlob.arrayBuffer();
     const sttResponse = await fetch(
-      'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&detect_language=true',
+      'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&detect_language=true&mimetype=audio/webm',
       {
         method: 'POST',
         headers: {
@@ -200,6 +200,9 @@ export async function POST(req: NextRequest) {
 
     const sttData = await sttResponse.json();
     const transcript = (sttData.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
+    console.log('[STT] status:', sttResponse.status, 'blobType:', audioBlob.type, 'bytes:', audioBuffer.byteLength);
+    console.log('[STT] raw response:', JSON.stringify(sttData).slice(0, 2000));
+    console.log('[STT] transcript extraído:', JSON.stringify(transcript));
 
     const { supabase, user } = await getAuthenticatedClient(req);
 
