@@ -4,10 +4,23 @@ import { NextResponse, type NextRequest } from 'next/server'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-const corsAllowedOrigins = (process.env.CORS_ALLOW_ORIGIN || 'http://localhost:5173,https://app.getathenos.com')
+const webOrigins = (process.env.CORS_ALLOW_ORIGIN || 'http://localhost:5173,https://app.getathenos.com')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean)
+
+// Tauri 2.x webview origins by platform (fixed, known constants):
+//   - Linux (WebKitGTK)  -> tauri://localhost
+//   - macOS (WKWebView)  -> tauri://localhost
+//   - Windows (WebView2) -> http://tauri.localhost (historically also https://)
+// Always merged in, independent of CORS_ALLOW_ORIGIN, so installed apps work on every platform.
+const tauriOrigins = [
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+]
+
+const corsAllowedOrigins = [...webOrigins, ...tauriOrigins]
 
 function getCorsHeaders(request: NextRequest): Record<string, string> {
   const origin = request.headers.get('origin') || ''
