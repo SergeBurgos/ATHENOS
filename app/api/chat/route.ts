@@ -554,6 +554,22 @@ export async function POST(req: NextRequest) {
     // Determine conversation: use incoming ID or create new
     let conversationId = incomingConvId;
 
+    if (conversationId) {
+      // Defense in depth: never write into a conversation the user doesn't own.
+      // Verify ownership before accepting a client-supplied conversation id.
+      const { data: ownedConv, error: lookupErr } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('id', conversationId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (lookupErr || !ownedConv) {
+        console.warn('[chat] Foreign/unknown conversationId, creating a new conversation:', conversationId);
+        conversationId = null;
+      }
+    }
+
     if (!conversationId) {
       const { data: newConv, error: convError } = await supabase
         .from('conversations')

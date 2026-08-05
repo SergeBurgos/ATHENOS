@@ -229,10 +229,12 @@ export default function Home() {
   }, []);
 
   const loadConversations = async () => {
+    if (!user) return;
     const supabase = createClient();
     const { data, error } = await supabase
       .from('conversations')
       .select('id, title, created_at, updated_at')
+      .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -307,9 +309,25 @@ export default function Home() {
 
   const loadConversation = async (convId: string) => {
     if (loadingConv || convId === conversationId) return;
+    if (!user) return;
 
     setLoadingConv(true);
     const supabase = createClient();
+
+    // Defense in depth: only load messages for a conversation this user owns.
+    const { data: ownedConv, error: convErr } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', convId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (convErr || !ownedConv) {
+      console.error('Conversation not found or not owned:', convId);
+      setLoadingConv(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('messages')
       .select('role, content, created_at')
@@ -553,7 +571,7 @@ export default function Home() {
       if (!isStream) {
         // JSON path (Sophocles) — comportamiento original
         const data = await response.json();
-        if (data.conversationId && !conversationId) {
+        if (data.conversationId) {
           setConversationId(data.conversationId);
         }
         const assistantMessage: Message = {
@@ -601,7 +619,7 @@ export default function Home() {
             }
 
             if (evt.type === 'meta') {
-              if (evt.conversationId && !conversationId) {
+              if (evt.conversationId) {
                 setConversationId(evt.conversationId);
               }
             } else if (evt.type === 'delta') {
