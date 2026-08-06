@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getAuthenticatedClient } from '@/lib/auth';
 import OpenAI from 'openai';
 import { ModelTier, buildSystemPrompt, MODEL_BY_TIER } from '@/lib/athenos';
+import { isAdminEmail } from '@/lib/billing';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { tools, executeTool } from '@/lib/tools';
@@ -11,6 +12,20 @@ import { getUserMemories, formatMemoriesForPrompt, extractFact, saveMemory } fro
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+const AVAILABLE_MODELS: ModelTier[] = ['sophocles', 'socrates', 'ares', 'athena'];
+
+function isValidModel(model: unknown): model is ModelTier {
+  return typeof model === 'string' && (AVAILABLE_MODELS as string[]).includes(model);
+}
+
+// Same tier gating as /api/chat: Sophocles is free; admins get every mind;
+// all other minds are gated until they're released to paying users.
+async function userHasAccessToTier(userEmail: string | undefined, tier: ModelTier): Promise<boolean> {
+  if (tier === 'sophocles') return true;
+  if (isAdminEmail(userEmail)) return true;
+  return false;
+}
 
 function shouldFallback(error: any): boolean {
   const status = error?.status || error?.response?.status;
@@ -161,6 +176,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const audioBlob = formData.get('audio') as Blob;
     const historyStr = formData.get('history') as string;
+    const mindStr = formData.get('mind') as string;
     let history: Array<{ role: 'user' | 'assistant', content: string }> = [];
     try {
       if (historyStr) history = JSON.parse(historyStr);
@@ -211,11 +227,27 @@ export async function POST(req: NextRequest) {
       memories = await getUserMemories(supabase, user.id);
     }
 
-    // Voice mode currently supports only Sophocles persona.
-    // Athena uses Opus which is too slow for real-time voice interaction.
-    const model: ModelTier = 'sophocles';
-    
-    // Use model-specific system prompt
+    // Resolve the selected mind from FormData ('sophocles'|'socrates'|'ares'|'athena').
+    // If absent or unknown, fall back to sophocles for retro-compatibility.
+    const requestedModel: ModelTier = isValidModel(mindStr) ? mindStr : 'sophocles';
+
+    // Gating (same as /api/chat): block minds above the user's tier.
+    const hasAccess = await userHasAccessToTier(user?.email, requestedModel);
+    if (!hasAccess) {
+      return NextResponse.json(
+        {
+          error: 'STRATEGIST_REQUIRED',
+          message: `${requestedModel} is available on Strategist plan only. Upgrade to access deep reasoning.`,
+          upgradeUrl: '/upgrade',
+        },
+        { status: 403 }
+      );
+    }
+
+    const model: ModelTier = requestedModel;
+
+    // Use the mind-specific system prompt: shared base (web search + language)
+    // with the mind's personality layered on top. Same as /api/chat.
     const systemPrompt = buildSystemPrompt(model);
     const memoryContext = formatMemoriesForPrompt(memories);
     const enhancedSystemPrompt = memoryContext 
